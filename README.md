@@ -43,9 +43,9 @@ npm start
 
 ## Authentication
 
-All chat API endpoints require authentication using the `Authorization` header:
+All chat API endpoints require authentication using the `api-key` header:
 ```
-Authorization: Bearer YOUR_EXTERNAL_API_KEY
+api-key: YOUR_EXTERNAL_API_KEY
 ```
 
 ## Testing

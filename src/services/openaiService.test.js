@@ -28,7 +28,7 @@ describe('OpenAIService.createChatCompletion', () => {
   });
 
   describe('successful responses', () => {
-    it('should return success and data with last_response_id when provided', async () => {
+    it('should return success and message with last_response_id when provided', async () => {
       const mockResponse = {
         output_text: 'Hello! How can I help you today?',
         id: 'abc123'
@@ -40,22 +40,23 @@ describe('OpenAIService.createChatCompletion', () => {
       
       expect(result).toEqual({
         success: true,
-        data: 'Hello! How can I help you today?',
-        last_response_id: 'abc123'
+        message: 'Hello! How can I help you today?',
+        last_response_id: 'abc123',
+        project_name: null
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-4.1',
           instructions: 'You are a helpful assistant.',
           input: 'Hi',
           temperature: 0.7,
-          last_response_id: 'prevId'
+          previous_response_id: 'prevId'
         })
       );
     });
 
-    it('should return success and data without last_response_id when not provided', async () => {
+    it('should return success and message without last_response_id when not provided', async () => {
       const mockResponse = {
         output_text: 'Hi there! Nice to meet you.',
         id: 'xyz789'
@@ -67,13 +68,14 @@ describe('OpenAIService.createChatCompletion', () => {
       
       expect(result).toEqual({
         success: true,
-        data: 'Hi there! Nice to meet you.',
-        last_response_id: 'xyz789'
+        message: 'Hi there! Nice to meet you.',
+        last_response_id: 'xyz789',
+        project_name: null
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gpt-3.5-turbo',
+          model: 'gpt-4.1',
           instructions: 'You are a helpful assistant.',
           input: 'Hello',
           temperature: 0.7
@@ -86,6 +88,62 @@ describe('OpenAIService.createChatCompletion', () => {
           last_response_id: expect.anything()
         })
       );
+    });
+
+    it('should return fixed test response when test parameter is true', async () => {
+      const result = await openaiService.createChatCompletion('Test prompt', {}, null, true, 'test-project');
+      
+      expect(result.success).toBe(true);
+      expect(result.message).toContain('Test prompt');
+      expect(result.message).toMatch(/^(This is a test response|Test mode activated|Mock response|This is a simulated|Test response generated|Fake AI response|Mock completion|Test environment|Simulated chat|Development mode)/);
+      expect(result.last_response_id).toMatch(/^test-response-id-[a-z0-9]+$/);
+      expect(result.project_name).toBe('test-project');
+      
+      // Should not call the OpenAI API when in test mode
+      expect(openaiService.client.responses.create).not.toHaveBeenCalled();
+    });
+
+    it('should handle null projectName in test mode', async () => {
+      const result = await openaiService.createChatCompletion('Test prompt', {}, null, true, null);
+      
+      expect(result.success).toBe(true);
+      expect(result.project_name).toBeNull();
+    });
+
+    it('should include projectName in successful responses', async () => {
+      const mockResponse = {
+        output_text: 'Hello! How can I help you today?',
+        id: 'abc123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      const result = await openaiService.createChatCompletion('Hi', {}, null, false, 'my-project');
+      
+      expect(result).toEqual({
+        success: true,
+        message: 'Hello! How can I help you today?',
+        last_response_id: 'abc123',
+        project_name: 'my-project'
+      });
+    });
+
+    it('should handle null projectName in normal mode', async () => {
+      const mockResponse = {
+        output_text: 'Hello! How can I help you today?',
+        id: 'abc123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      const result = await openaiService.createChatCompletion('Hi', {}, null, false, null);
+      
+      expect(result).toEqual({
+        success: true,
+        message: 'Hello! How can I help you today?',
+        last_response_id: 'abc123',
+        project_name: null
+      });
     });
 
     it('should merge custom options with defaults', async () => {
@@ -226,7 +284,7 @@ describe('OpenAIService.createChatCompletion', () => {
       await openaiService.createChatCompletion('Test prompt');
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4.1',
         instructions: 'You are a helpful assistant.',
         input: 'Test prompt',
         temperature: 0.7
@@ -265,7 +323,7 @@ describe('OpenAIService.createChatCompletion', () => {
       await openaiService.createChatCompletion('Test prompt', {});
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4.1',
         instructions: 'You are a helpful assistant.',
         input: 'Test prompt',
         temperature: 0.7

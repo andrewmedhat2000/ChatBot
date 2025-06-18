@@ -9,10 +9,10 @@ http://your-server:3000/api/chat
 
 ## Authentication
 
-All chat API endpoints require authentication using an API key. Include your API key in the `Authorization` header:
+All chat API endpoints require authentication using an API key. Include your API key in the `api-key` header:
 
 ```
-Authorization: Bearer YOUR_API_KEY_HERE
+api-key: YOUR_API_KEY_HERE
 ```
 
 ## Endpoints
@@ -26,7 +26,7 @@ Authorization: Bearer YOUR_API_KEY_HERE
 **Headers:**
 ```
 Content-Type: application/json
-Authorization: Bearer YOUR_API_KEY_HERE
+api-key: YOUR_API_KEY_HERE
 ```
 
 **Request Body:**
@@ -37,9 +37,11 @@ Authorization: Bearer YOUR_API_KEY_HERE
   "options": {
     "temperature": 0.7,
     "max_tokens": 1000,
-    "model": "gpt-3.5-turbo"
+    "model": "gpt-4.1"
   },
-  "lastResponseId": "optional-response-id-for-conversation-continuity"
+  "lastResponseId": "optional-response-id-for-conversation-continuity",
+  "test": false,
+  "projectName": "optional-project-name"
 }
 ```
 
@@ -49,15 +51,18 @@ Authorization: Bearer YOUR_API_KEY_HERE
 - `options` (optional): Configuration options
   - `temperature` (optional): Controls randomness (0-2, default: 0.7)
   - `max_tokens` (optional): Maximum tokens in response (1-4000)
-  - `model` (optional): AI model to use (default: gpt-3.5-turbo)
+  - `model` (optional): AI model to use (default: gpt-4.1)
 - `lastResponseId` (optional): ID from previous response for conversation continuity
+- `test` (optional): Boolean flag for test mode - returns fixed response when true
+- `projectName` (optional): Project name for tracking and organization (can be null)
 
 **Response:**
 ```json
 {
   "success": true,
-  "data": "AI response text here",
-  "last_response_id": "response-id-for-next-request"
+  "message": "AI response text here",
+  "last_response_id": "response-id-for-next-request",
+  "project_name": "project-name-or-null"
 }
 ```
 
@@ -79,7 +84,7 @@ Authorization: Bearer YOUR_API_KEY_HERE
 
 **Headers:**
 ```
-Authorization: Bearer YOUR_API_KEY_HERE
+api-key: YOUR_API_KEY_HERE
 ```
 
 **Response:**
@@ -106,7 +111,7 @@ Authorization: Bearer YOUR_API_KEY_HERE
 ```bash
 curl -X POST http://localhost:3000/api/chat/completion \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY_HERE" \
+  -H "api-key: YOUR_API_KEY_HERE" \
   -d '{
     "prompt": "What is the capital of France?",
     "options": {
@@ -116,13 +121,58 @@ curl -X POST http://localhost:3000/api/chat/completion \
   }'
 ```
 
+### Test Mode Example
+```bash
+curl -X POST http://localhost:3000/api/chat/completion \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY_HERE" \
+  -d '{
+    "prompt": "Hello world",
+    "test": true
+  }'
+```
+
+**Test Mode Response:**
+```json
+{
+  "success": true,
+  "message": "This is a test response from the OpenAI service. The prompt was: Hello world",
+  "last_response_id": "test-response-id-12345"
+}
+```
+
+### Project Name Example
+```bash
+curl -X POST http://localhost:3000/api/chat/completion \
+  -H "Content-Type: application/json" \
+  -H "api-key: YOUR_API_KEY_HERE" \
+  -d '{
+    "prompt": "Write a function to calculate fibonacci numbers",
+    "projectName": "math-library",
+    "options": {
+      "temperature": 0.3,
+      "max_tokens": 200
+    }
+  }'
+```
+
+**Project Name Response:**
+```json
+{
+  "success": true,
+  "message": "Here's a function to calculate Fibonacci numbers...",
+  "last_response_id": "abc123def456",
+  "project_name": "math-library"
+}
+```
+
 ### JavaScript Example
 ```javascript
 const response = await fetch('http://localhost:3000/api/chat/completion', {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer YOUR_API_KEY_HERE'
+    'api-key': 'YOUR_API_KEY_HERE'
   },
   body: JSON.stringify({
     prompt: 'What is the capital of France?',
@@ -144,7 +194,7 @@ import requests
 url = 'http://localhost:3000/api/chat/completion'
 headers = {
     'Content-Type': 'application/json',
-    'Authorization': 'Bearer YOUR_API_KEY_HERE'
+    'api-key': 'YOUR_API_KEY_HERE'
 }
 data = {
     'prompt': 'What is the capital of France?',
