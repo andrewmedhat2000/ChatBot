@@ -21,19 +21,20 @@ class OpenAIService {
         temperature: 0.7,
       };
 
-      const response = await this.client.responses.create({
+      const payload = {
         ...defaultOptions,
-        ...options,
-        last_response_id: lastResponseId
-      });
+        ...options
+      };
+      if (lastResponseId !== null) {
+        payload.last_response_id = lastResponseId;
+      }
+
+      const response = await this.client.responses.create(payload);
 
       return {
         success: true,
         data: response.output_text,
-        model: response.model,
-        usage: response.usage,
-        created: response.created,
-        system_fingerprint: response.system_fingerprint
+        last_response_id: response.id,
       };
     } catch (error) {
       logger.error('Error in OpenAI service:', error);

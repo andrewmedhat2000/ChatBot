@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest"
+    "test": "jest",
+    "test:external-api": "node test-external-api.js"
   },
   "keywords": ["openai", "chatgpt", "api"],
   "author": "",
@@ -16,10 +17,12 @@
     "openai": "^4.29.0",
     "dotenv": "^16.4.1",
     "winston": "^3.11.0",
-    "express-validator": "^7.0.1"
+    "express-validator": "^7.0.1",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3"
   }
 }

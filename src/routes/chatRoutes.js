@@ -1,6 +1,7 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
 const openaiService = require('../services/openaiService');
+const apiKeyAuth = require('../middleware/apiKeyAuth');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -16,9 +17,8 @@ const validateChatRequest = [
   body('lastResponseId').optional().isString().withMessage('Last response ID must be a string')
 ];
 
-
-// Chat completion endpoint
-router.post('/completion', validateChatRequest, async (req, res) => {
+// Chat completion endpoint with API key authentication
+router.post('/completion', apiKeyAuth, validateChatRequest, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -29,6 +29,10 @@ router.post('/completion', validateChatRequest, async (req, res) => {
     }
 
     const { prompt, instructions, options, lastResponseId } = req.body;
+    
+    // Log the request for API usage
+    logger.info(`API request from IP: ${req.ip}, User-Agent: ${req.get('User-Agent')}`);
+    
     const result = await openaiService.createChatCompletion(prompt, {
       ...options,
       instructions
@@ -56,5 +60,6 @@ router.post('/completion', validateChatRequest, async (req, res) => {
     });
   }
 });
+
 
 module.exports = router; 
