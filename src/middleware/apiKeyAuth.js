@@ -29,6 +29,7 @@ const apiKeyAuth = (req, res, next) => {
     }
 
     if (apiKey !== expectedApiKey) {
+      console.log(apiKey, expectedApiKey);
       logger.warn(`Invalid API key attempt from IP: ${req.ip}`);
       return res.status(401).json({
         success: false,

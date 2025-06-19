@@ -21,12 +21,7 @@ const validateChatRequest = [
     return true;
   }).withMessage('Last response ID must be a string or null'),
   body('test').optional().isBoolean().withMessage('Test must be a boolean'),
-  body('projectName').optional().custom((value) => {
-    if (value !== null && typeof value !== 'string') {
-      throw new Error('Project name must be a string or null');
-    }
-    return true;
-  }).withMessage('Project name must be a string or null')
+  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string')
 ];
 
 // Chat completion endpoint with API key authentication
