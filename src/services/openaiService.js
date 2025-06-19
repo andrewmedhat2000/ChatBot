@@ -62,6 +62,17 @@ class OpenAIService {
             payload.previous_response_id = projectPromptResult.openaiResponseId;
           }
         }
+        
+        // Detect language from the first message and set context
+        const detectedLanguage = this.detectLanguage(prompt);
+        const languageInstruction = this.getLanguageInstruction(detectedLanguage);
+        
+        // Update instructions to include language context
+        if (payload.instructions) {
+          payload.instructions += ` ${languageInstruction}`;
+        } else {
+          payload.instructions = `You are a helpful assistant. ${languageInstruction}`;
+        }
       }
 
       const response = await this.client.responses.create(payload);
@@ -209,6 +220,32 @@ IMPORTANT GUIDELINES:
 Remember: Your ultimate goal is to help qualify this lead and encourage them to book a meeting or call with our sales team for personalized assistance.`;
 
     return prompt;
+  }
+
+  detectLanguage(text) {
+    // Simple language detection based on common patterns
+    const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
+    const englishPattern = /^[a-zA-Z\s.,!?;:'"()-]+$/;
+    
+    if (arabicPattern.test(text)) {
+      return 'arabic';
+    } else if (englishPattern.test(text) || text.match(/[a-zA-Z]/)) {
+      return 'english';
+    } else {
+      // Default to English if language cannot be determined
+      return 'english';
+    }
+  }
+
+  getLanguageInstruction(language) {
+    switch (language) {
+      case 'arabic':
+        return 'Always respond in Arabic language. Use formal Arabic when appropriate.';
+      case 'english':
+        return 'Always respond in English language.';
+      default:
+        return 'Always respond in English language.';
+    }
   }
 
 }

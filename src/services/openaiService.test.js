@@ -76,7 +76,7 @@ describe('OpenAIService.createChatCompletion', () => {
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'gpt-4.1',
-          instructions: 'You are a helpful assistant.',
+          instructions: 'You are a helpful assistant. Always respond in English language.',
           input: 'Hello',
           temperature: 0.7
         })
@@ -168,7 +168,7 @@ describe('OpenAIService.createChatCompletion', () => {
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'gpt-4',
-          instructions: 'You are a coding assistant.',
+          instructions: 'You are a coding assistant. Always respond in English language.',
           input: 'Write a function',
           temperature: 0.5,
           max_tokens: 200
@@ -285,7 +285,7 @@ describe('OpenAIService.createChatCompletion', () => {
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith({
         model: 'gpt-4.1',
-        instructions: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant. Always respond in English language.',
         input: 'Test prompt',
         temperature: 0.7
       });
@@ -307,7 +307,7 @@ describe('OpenAIService.createChatCompletion', () => {
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          instructions: 'You are a specialized math tutor.'
+          instructions: 'You are a specialized math tutor. Always respond in English language.'
         })
       );
     });
@@ -324,7 +324,7 @@ describe('OpenAIService.createChatCompletion', () => {
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith({
         model: 'gpt-4.1',
-        instructions: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant. Always respond in English language.',
         input: 'Test prompt',
         temperature: 0.7
       });
