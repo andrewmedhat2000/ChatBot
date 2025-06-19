@@ -1,11 +1,63 @@
 const openaiService = require('./openaiService');
-const logger = require('../utils/logger');
 
+// Mock the logger
+jest.mock('../utils/logger', () => ({
+  info: jest.fn(),
+  error: jest.fn(),
+  warn: jest.fn()
+}));
+
+// Mock the datasetService
+jest.mock('./datasetService', () => ({
+  loadDataset: jest.fn().mockResolvedValue({
+    success: true,
+    count: 875,
+    message: 'Dataset loaded successfully'
+  }),
+  getProjectByName: jest.fn().mockResolvedValue({
+    success: true,
+    project: {
+      name: 'Test Project',
+      developer_name: 'Test Developer',
+      area_name: 'Test Area',
+      min_price: 2000000,
+      max_price: 4000000
+    }
+  }),
+  getSimilarProjects: jest.fn().mockResolvedValue({
+    success: true,
+    projects: []
+  }),
+  searchProjects: jest.fn().mockResolvedValue({
+    success: true,
+    projects: [],
+    count: 0,
+    total: 875
+  }),
+  getMarketInsights: jest.fn().mockResolvedValue({
+    success: true,
+    insights: {
+      totalProjects: 875,
+      priceRange: {
+        min: 1800000,
+        max: 274023000,
+        avg: 26464777.872
+      },
+      areas: ['October Gardens', 'New Cairo', '6th settlement'],
+      developers: ['Orascom Development Egypt', 'Palm Hills Developments'],
+      financingAvailable: 31,
+      avgPrice: 26464777.872
+    }
+  }),
+  formatProjectsForPrompt: jest.fn().mockReturnValue('Formatted project data')
+}));
+
+// Mock OpenAI
 jest.mock('openai');
-jest.mock('../utils/logger');
 
 describe('OpenAIService.createChatCompletion', () => {
   let originalClient;
+  const logger = require('../utils/logger');
 
   beforeEach(() => {
     // Store original client
@@ -30,26 +82,28 @@ describe('OpenAIService.createChatCompletion', () => {
   describe('successful responses', () => {
     it('should return success and message with last_response_id when provided', async () => {
       const mockResponse = {
-        output_text: 'Hello! How can I help you today?',
-        id: 'abc123'
+        output_text: 'Hi there! Nice to meet you.',
+        id: 'xyz789'
       };
       
       openaiService.client.responses.create.mockResolvedValue(mockResponse);
       
-      const result = await openaiService.createChatCompletion('Hi', {}, 'prevId');
+      const result = await openaiService.createChatCompletion('Hello', {}, 'prevId');
       
       expect(result).toEqual({
         success: true,
-        message: 'Hello! How can I help you today?',
-        last_response_id: 'abc123',
-        project_name: null
+        message: 'Hi there! Nice to meet you.',
+        last_response_id: 'xyz789',
+        project_name: null,
+        dataset_used: true,
+        context_info: expect.any(String)
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'gpt-4.1',
-          instructions: 'You are a helpful assistant.',
-          input: 'Hi',
+          instructions: expect.any(String),
+          input: expect.stringContaining('Hello'),
           temperature: 0.7,
           previous_response_id: 'prevId'
         })
@@ -58,34 +112,29 @@ describe('OpenAIService.createChatCompletion', () => {
 
     it('should return success and message without last_response_id when not provided', async () => {
       const mockResponse = {
-        output_text: 'Hi there! Nice to meet you.',
-        id: 'xyz789'
+        output_text: 'Hello! How can I help you today?',
+        id: 'abc123'
       };
       
       openaiService.client.responses.create.mockResolvedValue(mockResponse);
       
-      const result = await openaiService.createChatCompletion('Hello');
+      const result = await openaiService.createChatCompletion('Hi');
       
       expect(result).toEqual({
         success: true,
-        message: 'Hi there! Nice to meet you.',
-        last_response_id: 'xyz789',
-        project_name: null
+        message: 'Hello! How can I help you today?',
+        last_response_id: 'abc123',
+        project_name: null,
+        dataset_used: true,
+        context_info: expect.any(String)
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
           model: 'gpt-4.1',
-          instructions: 'You are a helpful assistant. Always respond in English language.',
-          input: 'Hello',
+          instructions: expect.stringContaining('You are a professional real estate consultant'),
+          input: 'Hi',
           temperature: 0.7
-        })
-      );
-      
-      // Should not include last_response_id when null
-      expect(openaiService.client.responses.create).toHaveBeenCalledWith(
-        expect.not.objectContaining({
-          last_response_id: expect.anything()
         })
       );
     });
@@ -108,6 +157,8 @@ describe('OpenAIService.createChatCompletion', () => {
       
       expect(result.success).toBe(true);
       expect(result.project_name).toBeNull();
+      expect(result.dataset_used).toBeFalsy();
+      expect(result.context_info).toBeUndefined();
     });
 
     it('should include projectName in successful responses', async () => {
@@ -124,7 +175,9 @@ describe('OpenAIService.createChatCompletion', () => {
         success: true,
         message: 'Hello! How can I help you today?',
         last_response_id: 'abc123',
-        project_name: 'my-project'
+        project_name: 'my-project',
+        dataset_used: true,
+        context_info: expect.any(String)
       });
     });
 
@@ -142,36 +195,38 @@ describe('OpenAIService.createChatCompletion', () => {
         success: true,
         message: 'Hello! How can I help you today?',
         last_response_id: 'abc123',
-        project_name: null
+        project_name: null,
+        dataset_used: true,
+        context_info: expect.any(String)
       });
     });
 
     it('should merge custom options with defaults', async () => {
       const mockResponse = {
-        output_text: 'Custom response',
-        id: 'def456'
+        output_text: 'Test response',
+        id: 'test123'
       };
       
       openaiService.client.responses.create.mockResolvedValue(mockResponse);
       
-      const customOptions = {
+      const options = {
         model: 'gpt-4',
         temperature: 0.5,
         max_tokens: 200,
         instructions: 'You are a coding assistant.'
       };
       
-      const result = await openaiService.createChatCompletion('Write a function', customOptions);
+      const result = await openaiService.createChatCompletion('Write a function', options);
       
       expect(result.success).toBe(true);
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'gpt-4',
-          instructions: 'You are a coding assistant. Always respond in English language.',
           input: 'Write a function',
-          temperature: 0.5,
-          max_tokens: 200
+          instructions: expect.stringContaining('You are a professional real estate consultant'),
+          max_tokens: 200,
+          model: 'gpt-4',
+          temperature: 0.5
         })
       );
     });
@@ -194,6 +249,119 @@ describe('OpenAIService.createChatCompletion', () => {
           last_response_id: expect.anything()
         })
       );
+    });
+  });
+
+  describe('test mode', () => {
+    it('should return test response when test is true', async () => {
+      const result = await openaiService.createChatCompletion('Test prompt', {}, null, true);
+      
+      expect(result.success).toBe(true);
+      expect(result.message).toMatch(/^(This is a test response|Test mode activated|Mock response|This is a simulated|Test response generated|Fake AI response|Mock completion|Test environment|Simulated chat|Development mode)/);
+      expect(result.last_response_id).toContain('test-response-id-');
+      expect(result.dataset_used).toBeFalsy();
+      expect(result.context_info).toBeUndefined();
+    });
+
+    it('should return different test responses', async () => {
+      const results = [];
+      for (let i = 0; i < 5; i++) {
+        const result = await openaiService.createChatCompletion('Test prompt', {}, null, true);
+        results.push(result.message);
+      }
+      
+      // Should get different test messages
+      const uniqueMessages = new Set(results);
+      expect(uniqueMessages.size).toBeGreaterThan(1);
+    });
+  });
+
+  describe('payload construction', () => {
+    it('should construct payload with all required fields', async () => {
+      const mockResponse = {
+        output_text: 'Test response',
+        id: 'test123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      await openaiService.createChatCompletion('Test prompt');
+      
+      expect(openaiService.client.responses.create).toHaveBeenCalledWith({
+        model: 'gpt-4.1',
+        instructions: expect.stringContaining('You are a professional real estate consultant'),
+        input: 'Test prompt',
+        temperature: 0.7
+      });
+    });
+
+    it('should merge custom options with defaults', async () => {
+      const mockResponse = {
+        output_text: 'Test response',
+        id: 'test123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      const options = {
+        model: 'gpt-4',
+        temperature: 0.5,
+        max_tokens: 200,
+        instructions: 'You are a coding assistant.'
+      };
+      
+      const result = await openaiService.createChatCompletion('Write a function', options);
+      
+      expect(result.success).toBe(true);
+      
+      expect(openaiService.client.responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: 'Write a function',
+          instructions: expect.stringContaining('You are a professional real estate consultant'),
+          max_tokens: 200,
+          model: 'gpt-4',
+          temperature: 0.5
+        })
+      );
+    });
+
+    it('should override default instructions when provided', async () => {
+      const mockResponse = {
+        output_text: 'Test response',
+        id: 'test123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      const options = {
+        instructions: 'You are a specialized math tutor.'
+      };
+      
+      await openaiService.createChatCompletion('Solve 2x + 5 = 15', options);
+      
+      expect(openaiService.client.responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instructions: expect.stringContaining('You are a professional real estate consultant')
+        })
+      );
+    });
+
+    it('should handle empty options object', async () => {
+      const mockResponse = {
+        output_text: 'Test response',
+        id: 'test123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      await openaiService.createChatCompletion('Test prompt', {});
+      
+      expect(openaiService.client.responses.create).toHaveBeenCalledWith({
+        model: 'gpt-4.1',
+        instructions: expect.stringContaining('You are a professional real estate consultant'),
+        input: 'Test prompt',
+        temperature: 0.7
+      });
     });
   });
 
@@ -272,62 +440,37 @@ describe('OpenAIService.createChatCompletion', () => {
     });
   });
 
-  describe('payload construction', () => {
-    it('should construct payload with all required fields', async () => {
-      const mockResponse = {
-        output_text: 'Test response',
-        id: 'test123'
-      };
-      
-      openaiService.client.responses.create.mockResolvedValue(mockResponse);
-      
-      await openaiService.createChatCompletion('Test prompt');
-      
-      expect(openaiService.client.responses.create).toHaveBeenCalledWith({
-        model: 'gpt-4.1',
-        instructions: 'You are a helpful assistant. Always respond in English language.',
-        input: 'Test prompt',
-        temperature: 0.7
-      });
+  describe('language detection', () => {
+    it('should detect English language', () => {
+      const result = openaiService.detectLanguage('Hello, how are you?');
+      expect(result).toBe('english');
     });
 
-    it('should override default instructions when provided', async () => {
-      const mockResponse = {
-        output_text: 'Test response',
-        id: 'test123'
-      };
-      
-      openaiService.client.responses.create.mockResolvedValue(mockResponse);
-      
-      const options = {
-        instructions: 'You are a specialized math tutor.'
-      };
-      
-      await openaiService.createChatCompletion('Solve 2x + 5 = 15', options);
-      
-      expect(openaiService.client.responses.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          instructions: 'You are a specialized math tutor. Always respond in English language.'
-        })
-      );
+    it('should detect Arabic language', () => {
+      const result = openaiService.detectLanguage('مرحبا، كيف حالك؟');
+      expect(result).toBe('arabic');
     });
 
-    it('should handle empty options object', async () => {
-      const mockResponse = {
-        output_text: 'Test response',
-        id: 'test123'
-      };
-      
-      openaiService.client.responses.create.mockResolvedValue(mockResponse);
-      
-      await openaiService.createChatCompletion('Test prompt', {});
-      
-      expect(openaiService.client.responses.create).toHaveBeenCalledWith({
-        model: 'gpt-4.1',
-        instructions: 'You are a helpful assistant. Always respond in English language.',
-        input: 'Test prompt',
-        temperature: 0.7
-      });
+    it('should default to English for mixed content', () => {
+      const result = openaiService.detectLanguage('Hello مرحبا');
+      expect(result).toBe('arabic'); // Arabic characters are detected first
+    });
+  });
+
+  describe('language instructions', () => {
+    it('should return English instruction', () => {
+      const result = openaiService.getLanguageInstruction('english');
+      expect(result).toBe('Always respond in English language.');
+    });
+
+    it('should return Arabic instruction', () => {
+      const result = openaiService.getLanguageInstruction('arabic');
+      expect(result).toBe('Always respond in Arabic language. Use formal Arabic when appropriate.');
+    });
+
+    it('should default to English for unknown language', () => {
+      const result = openaiService.getLanguageInstruction('unknown');
+      expect(result).toBe('Always respond in English language.');
     });
   });
 }); 

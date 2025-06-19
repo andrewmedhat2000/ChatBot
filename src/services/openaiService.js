@@ -1,6 +1,7 @@
 const OpenAI = require('openai');
 const fetch = require('node-fetch');
 const logger = require('../utils/logger');
+const datasetService = require('./datasetService');
 
 class OpenAIService {
   constructor() {
@@ -16,6 +17,7 @@ class OpenAIService {
   async createChatCompletion(prompt, options = {}, lastResponseId = null, test = false, projectName = null, skipProjectPrompt = false) {
     try {
 
+      //console.log("api key", apiKey);
       if (test) {
         const testMessages = [
           "This is a test response from the OpenAI service. The prompt was: " + prompt,
@@ -52,8 +54,30 @@ class OpenAIService {
         ...options
       };
       
+      // Initialize datasetContext variable
+      let datasetContext = { success: false, contextInfo: null };
+      
+      // Always load dataset context for comprehensive responses
+      datasetContext = await this.getDatasetContext(prompt, projectName);
+      
+      // Detect language from the current prompt (not conversation history)
+      const detectedLanguage = this.detectLanguage(prompt);
+      const languageInstruction = this.getLanguageInstruction(detectedLanguage);
+      
       if (lastResponseId !== null) {
         payload.previous_response_id = lastResponseId;
+        
+        // For conversation continuations, enhance the prompt with dataset context and language instruction
+        let enhancedPrompt = prompt;
+        
+        if (datasetContext.success && datasetContext.context) {
+          enhancedPrompt += `\n\nCONTEXT: ${datasetContext.context}`;
+        }
+        
+        // Add language instruction to the prompt
+        enhancedPrompt += `\n\nINSTRUCTION: ${languageInstruction}`;
+        
+        payload.input = enhancedPrompt;
       }
       else{
         if (projectName && !skipProjectPrompt) {
@@ -63,15 +87,17 @@ class OpenAIService {
           }
         }
         
-        // Detect language from the first message and set context
-        const detectedLanguage = this.detectLanguage(prompt);
-        const languageInstruction = this.getLanguageInstruction(detectedLanguage);
+        // Update instructions to include language context and dataset information
+        let enhancedInstructions = `You are a professional real estate consultant with access to comprehensive project data. ${languageInstruction}`;
         
-        // Update instructions to include language context
+        if (datasetContext.success && datasetContext.context) {
+          enhancedInstructions += `\n\n${datasetContext.context}`;
+        }
+        
         if (payload.instructions) {
-          payload.instructions += ` ${languageInstruction}`;
+          payload.instructions = `${enhancedInstructions}\n\n${payload.instructions}`;
         } else {
-          payload.instructions = `You are a helpful assistant. ${languageInstruction}`;
+          payload.instructions = enhancedInstructions;
         }
       }
 
@@ -81,7 +107,9 @@ class OpenAIService {
         success: true,
         message: response.output_text,
         last_response_id: response.id,
-        project_name: projectName
+        project_name: projectName,
+        dataset_used: datasetContext?.success || false,
+        context_info: datasetContext?.contextInfo || null
       };
     } catch (error) {
       logger.error('Error in OpenAI service:', error);
@@ -105,6 +133,117 @@ class OpenAIService {
     }
   }
 
+  async getDatasetContext(prompt, projectName) {
+    try {
+      // Load dataset if not already loaded
+      const loadResult = await datasetService.loadDataset();
+      if (!loadResult.success) {
+        logger.warn('Dataset not available:', loadResult.error);
+        return { success: false, error: loadResult.error };
+      }
+
+      let contextInfo = `Market Overview: ${loadResult.count} total projects available.`;
+      let relevantProjects = [];
+      let similarProjects = [];
+
+      // Get specific project if mentioned
+      if (projectName) {
+        const projectResult = await datasetService.getProjectByName(projectName);
+        if (projectResult.success) {
+          relevantProjects.push(projectResult.project);
+          
+          // Get similar projects
+          const similarResult = await datasetService.getSimilarProjects(projectName, 3);
+          if (similarResult.success) {
+            similarProjects = similarResult.projects;
+          }
+        }
+      }
+
+      // Search for projects based on prompt keywords
+      const searchKeywords = this.extractSearchKeywords(prompt);
+      if (searchKeywords.length > 0) {
+        const searchResult = await datasetService.searchProjects(searchKeywords.join(' '));
+        
+        if (searchResult.success && searchResult.projects.length > 0) {
+          relevantProjects = [...relevantProjects, ...searchResult.projects.slice(0, 5)];
+        }
+      }
+
+      // Remove duplicates
+      relevantProjects = relevantProjects.filter((project, index, self) => 
+        index === self.findIndex(p => p.name === project.name)
+      );
+
+      // Format context
+      let context = '';
+      
+      if (relevantProjects.length > 0) {
+        context += `\n\nRELEVANT PROJECTS:\n${datasetService.formatProjectsForPrompt(relevantProjects)}`;
+        contextInfo += ` ${relevantProjects.length} relevant projects found.`;
+      }
+
+      if (similarProjects.length > 0) {
+        context += `\n\nSIMILAR ALTERNATIVES:\n${datasetService.formatProjectsForPrompt(similarProjects)}`;
+        contextInfo += ` ${similarProjects.length} similar alternatives available.`;
+      }
+
+      // Add market insights if no specific projects found
+      if (relevantProjects.length === 0 && similarProjects.length === 0) {
+        const insightsResult = await datasetService.getMarketInsights();
+        if (insightsResult.success) {
+          const insights = insightsResult.insights;
+          context += `\n\nMARKET OVERVIEW:
+- Total Projects: ${insights.totalProjects}
+- Price Range: EGP ${insights.priceRange.min.toLocaleString()} - ${insights.priceRange.max.toLocaleString()}
+- Average Price: EGP ${insights.priceRange.avg.toLocaleString()}
+- Available Areas: ${insights.areas.join(', ')}
+- Top Developers: ${insights.developers.slice(0, 5).join(', ')}
+- Projects with Financing: ${insights.financingAvailable}`;
+        }
+      }
+
+      // Add comparison capabilities
+      context += `\n\nCOMPARISON CAPABILITIES:
+- You can compare any projects mentioned by the user
+- Provide price comparisons, location benefits, and financing options
+- Suggest alternatives based on user preferences
+- Always mention specific project names when making comparisons`;
+
+      return {
+        success: true,
+        context,
+        contextInfo
+      };
+    } catch (error) {
+      logger.error('Error getting dataset context:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  extractSearchKeywords(prompt) {
+    const keywords = [];
+    const lowerPrompt = prompt.toLowerCase();
+    
+    // Common real estate terms
+    const realEstateTerms = [
+      'new cairo', 'madinaty', 'rehab', '6th of october', 'shorouk', 'sheikh zayed',
+      'apartment', 'villa', 'duplex', 'penthouse', 'studio',
+      'bedroom', 'bathroom', 'sqm', 'square meter', 'meter',
+      'price', 'cost', 'budget', 'expensive', 'cheap', 'affordable', 'cheapest',
+      'financing', 'installment', 'down payment', 'cash',
+      'delivery', 'ready', 'under construction', 'finished',
+      'developer', 'area', 'location', 'compound', 'project'
+    ];
+
+    realEstateTerms.forEach(term => {
+      if (lowerPrompt.includes(term)) {
+        keywords.push(term);
+      }
+    });
+
+    return keywords;
+  }
 
   async makeProjectPrompt(projectName) {
     try {
@@ -173,51 +312,39 @@ class OpenAIService {
       bruchure
     } = projectData;
 
-    const prompt = `You are a professional real estate consultant representing ${developer_name} for the ${name} project located in ${area_name}. 
+    const prompt = `You are a real estate consultant for ${name} by ${developer_name} in ${area_name}.
 
-PROJECT OVERVIEW:
-- Project Name: ${name}
-- Developer: ${developer_name}
-- Location: ${area_name}
-- Business Type: ${business_type}
-- Delivery Period: ${new Date(min_delivery_date).toLocaleDateString()} to ${new Date(max_delivery_date).toLocaleDateString()}
-
-PROPERTY SPECIFICATIONS:
-- Price Range: ${min_price ? `EGP ${min_price.toLocaleString()}` : 'Contact for pricing'} to ${max_price ? `EGP ${max_price.toLocaleString()}` : 'Contact for pricing'}
-- Area Range: ${min_area} to ${max_area} sqm
-- Bedrooms: ${min_bedrooms} to ${max_bedrooms} bedrooms
-- Bathrooms: ${min_bathrooms} to ${max_bathrooms} bathrooms
-
-AVAILABLE PROPERTY TYPES:
-${Object.entries(property_types_names).map(([type, count]) => `- ${type}: ${count} units available`).join('\n')}
-
-FINISHING OPTIONS:
-${Object.entries(finishing).map(([finish, count]) => `- ${finish.replace('_', ' ').toUpperCase()}: ${count} units`).join('\n')}
-
-FINANCING INFORMATION:
-- Financing Available: ${financing_eligibility ? 'Yes' : 'No'}
-- Installment Range: ${min_installments ? `EGP ${min_installments.toLocaleString()}` : 'Contact for details'} to ${max_installments ? `EGP ${max_installments.toLocaleString()}` : 'Contact for details'}
-- Down Payment: ${min_down_payment}% to ${max_down_payment}%
-
-BROCHURES AVAILABLE: ${bruchure.length} different brochures available for detailed information.
-
-YOUR ROLE:
-You are speaking with a potential buyer who is interested in this project. Your goal is to:
-1. Answer any questions they have about the project details, specifications, pricing, and availability
-2. Provide helpful information about the location, developer reputation, and project features
-3. Understand their specific needs and preferences
-4. Guide them towards scheduling a meeting or call with our sales team for detailed consultation
-5. Be professional, knowledgeable, and helpful while maintaining a consultative approach
-
-IMPORTANT GUIDELINES:
-- Always be helpful and informative
-- If you don't have specific information, suggest they speak with our sales team
-- Encourage them to schedule a meeting or call for detailed consultation
-- Be enthusiastic about the project while remaining professional
-- Ask qualifying questions to understand their needs better
-- Mention that you can arrange viewings or detailed consultations
-
-Remember: Your ultimate goal is to help qualify this lead and encourage them to book a meeting or call with our sales team for personalized assistance.`;
+    KEY PROJECT INFO:
+    - Price: EGP ${min_price?.toLocaleString() || 'Contact'} - ${max_price?.toLocaleString() || 'Contact'}
+    - Size: ${min_area}-${max_area} sqm
+    - Bedrooms: ${min_bedrooms}-${max_bedrooms}
+    - Delivery: ${new Date(min_delivery_date).toLocaleDateString()}
+    - Financing: ${financing_eligibility ? `Yes (${min_down_payment}%-${max_down_payment}% down)` : 'No'}
+    
+    LANGUAGE ADAPTATION:
+    - Mirror the client's language (Arabic/English/Mixed)
+    - If they use Egyptian slang, respond naturally but keep it professional
+    - OK: "ايوة، الشقة دي ممتازة" / "اه متاح تقسيط"
+    - NOT OK: Being too casual or using street slang
+    - Mix languages naturally if they do: "الproject ده في location ممتاز"
+    
+    RESPONSE RULES:
+    1. Give DIRECT, CONCISE answers (2-3 sentences max per response)
+    2. State facts, not fluff
+    3. If info is missing, say "I'll have our team provide that" - don't elaborate
+    4. End responses with ONE clear action: "Would you like to [specific action]?"
+    5. Adapt formality to match client (but stay professional)
+    
+    CONVERSATION FLOW:
+    - Answer → Qualify need → Book meeting
+    - Don't over-explain or repeat information
+    - Focus on their specific question only
+    
+    BOOKING SCRIPT:
+    Formal: "I can schedule a consultation with our sales team for [specific day/time]. Which works for you?"
+    Semi-formal: "نقدر نحجزلك meeting مع الsales team يوم [specific day/time]. ايه رأيك?"
+    
+    Remember: Be helpful but BRIEF. Match their style while keeping it professional.`;
 
     return prompt;
   }
@@ -227,9 +354,12 @@ Remember: Your ultimate goal is to help qualify this lead and encourage them to 
     const arabicPattern = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/;
     const englishPattern = /^[a-zA-Z\s.,!?;:'"()-]+$/;
     
-    if (arabicPattern.test(text)) {
+    // Clean the text and focus on the current prompt
+    const cleanText = text.trim();
+    
+    if (arabicPattern.test(cleanText)) {
       return 'arabic';
-    } else if (englishPattern.test(text) || text.match(/[a-zA-Z]/)) {
+    } else if (englishPattern.test(cleanText) || cleanText.match(/[a-zA-Z]/)) {
       return 'english';
     } else {
       // Default to English if language cannot be determined
