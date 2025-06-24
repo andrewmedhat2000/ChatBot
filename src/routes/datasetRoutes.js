@@ -300,4 +300,103 @@ router.get('/all', apiKeyAuth, async (req, res) => {
   }
 });
 
+// Get properties endpoint with hierarchical filtering
+router.post('/properties', apiKeyAuth, [
+  body('projectName').optional().isString().withMessage('Project name must be a string'),
+  body('propertyType').optional().isString().withMessage('Property type must be a string'),
+  body('businessType').optional().isIn(['primary', 'resale']).withMessage('Business type must be either primary or resale'),
+  body('filters').optional().isObject().withMessage('Filters must be an object'),
+  body('filters.price_min').optional().isNumeric().withMessage('Price min must be a number'),
+  body('filters.price_max').optional().isNumeric().withMessage('Price max must be a number'),
+  body('filters.bedrooms').optional().isInt({ min: 1 }).withMessage('Bedrooms must be a positive integer'),
+  body('filters.area_min').optional().isNumeric().withMessage('Area min must be a number'),
+  body('filters.area_max').optional().isNumeric().withMessage('Area max must be a number'),
+  body('filters.finishing').optional().isString().withMessage('Finishing must be a string'),
+  body('filters.financing_available').optional().isBoolean().withMessage('Financing available must be a boolean')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        errors: errors.array() 
+      });
+    }
+
+    const { projectName, propertyType, businessType, filters = {} } = req.body;
+    
+    logger.info(`Properties request: projectName="${projectName}", propertyType="${propertyType}", businessType="${businessType}", filters=`, filters);
+    
+    const result = await datasetService.getProperties(projectName, propertyType, businessType, filters);
+
+    if (!result.success) {
+      return res.status(404).json({ 
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      properties: result.properties,
+      count: result.count,
+      total: result.total,
+      filters: {
+        projectName,
+        propertyType,
+        businessType,
+        ...filters
+      }
+    });
+  } catch (error) {
+    logger.error('Error in properties route:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error',
+      type: 'server_error'
+    });
+  }
+});
+
+// Get property types for a project endpoint
+router.post('/property-types', apiKeyAuth, [
+  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        errors: errors.array() 
+      });
+    }
+
+    const { projectName } = req.body;
+    
+    logger.info(`Property types request: projectName="${projectName}"`);
+    
+    const result = await datasetService.getPropertyTypes(projectName);
+
+    if (!result.success) {
+      return res.status(404).json({ 
+        success: false,
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      propertyTypes: result.propertyTypes,
+      count: result.count
+    });
+  } catch (error) {
+    logger.error('Error in property types route:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error',
+      type: 'server_error'
+    });
+  }
+});
+
 module.exports = router; 

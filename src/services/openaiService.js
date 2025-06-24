@@ -54,63 +54,17 @@ class OpenAIService {
         ...options
       };
       
-      // Initialize datasetContext variable
-      let datasetContext = { success: false, contextInfo: null };
-      
-      // Always load dataset context for comprehensive responses
-      datasetContext = await this.getDatasetContext(prompt, projectName);
-      
-      // Detect language from the current prompt (not conversation history)
+      // Detect language from the current prompt
       const detectedLanguage = this.detectLanguage(prompt);
       const languageInstruction = this.getLanguageInstruction(detectedLanguage);
       
       if (lastResponseId !== null) {
-        payload.previous_response_id = lastResponseId;
-        
-        // For conversation continuations, enhance the prompt with dataset context and language instruction
-        let enhancedPrompt = prompt;
-        
-        if (datasetContext.success && datasetContext.context) {
-          enhancedPrompt += `\n\nCONTEXT: ${datasetContext.context}`;
-        }
-        
-        // Add language instruction to the prompt
-        enhancedPrompt += `\n\nINSTRUCTION: ${languageInstruction}`;
-        
-        payload.input = enhancedPrompt;
+        // Phase 2: Follow-up Questions (With last_response_id) - Detailed Analysis
+        return await this.handlePhase2Question(prompt, payload, lastResponseId, projectName, detectedLanguage, languageInstruction);
+      } else {
+        // Phase 1: First Question (No last_response_id) - Brief Project Overview
+        return await this.handlePhase1Question(prompt, payload, projectName, skipProjectPrompt, detectedLanguage, languageInstruction);
       }
-      else{
-        if (projectName && !skipProjectPrompt) {
-          const projectPromptResult = await this.makeProjectPrompt(projectName);
-          if (projectPromptResult.success) {
-            payload.previous_response_id = projectPromptResult.openaiResponseId;
-          }
-        }
-        
-        // Update instructions to include language context and dataset information
-        let enhancedInstructions = `You are a professional real estate consultant with access to comprehensive project data. ${languageInstruction}`;
-        
-        if (datasetContext.success && datasetContext.context) {
-          enhancedInstructions += `\n\n${datasetContext.context}`;
-        }
-        
-        if (payload.instructions) {
-          payload.instructions = `${enhancedInstructions}\n\n${payload.instructions}`;
-        } else {
-          payload.instructions = enhancedInstructions;
-        }
-      }
-
-      const response = await this.client.responses.create(payload);
-
-      return {
-        success: true,
-        message: response.output_text,
-        last_response_id: response.id,
-        project_name: projectName,
-        dataset_used: datasetContext?.success || false,
-        context_info: datasetContext?.contextInfo || null
-      };
     } catch (error) {
       logger.error('Error in OpenAI service:', error);
       
@@ -131,6 +85,462 @@ class OpenAIService {
         code: error.code || 'unknown'
       };
     }
+  }
+
+  async handlePhase1Question(prompt, payload, projectName, skipProjectPrompt, detectedLanguage, languageInstruction) {
+    try {
+      // Initialize datasetContext for basic project overview
+      let datasetContext = { success: false, contextInfo: null };
+      
+      // Load basic dataset context (no detailed properties)
+      datasetContext = await this.getBasicDatasetContext(prompt, projectName);
+      
+      if (projectName && !skipProjectPrompt) {
+        const projectPromptResult = await this.makeProjectPrompt(projectName);
+        if (projectPromptResult.success) {
+          payload.previous_response_id = projectPromptResult.openaiResponseId;
+        }
+      }
+      
+      // Phase 1 Instructions: Brief overview only
+      let enhancedInstructions = `You are a professional real estate consultant. ${languageInstruction}
+
+PHASE 1 RESPONSE RULES:
+- Provide 2-3 sentence brief project overview
+- Include project name, location, developer
+- Mention available property types and unit counts
+- NO detailed pricing or financing information
+- NO specific property details
+- Simple call-to-action asking what they need
+- Keep responses concise and welcoming
+
+PROFESSIONAL COMMUNICATION RULES:
+- NEVER say "based on the available data", "according to the data", "the data shows", or similar phrases
+- NEVER mention data sources, datasets, or technical details to customers
+- Speak with confidence and authority as a real estate expert
+- Present information as definitive facts, not as data analysis
+- Use professional, client-facing language at all times
+- Avoid any language that suggests uncertainty or data limitations
+
+EXAMPLE RESPONSE FORMAT:
+"[Project Name] by [Developer] in [Location] offers [property types] with [unit count] units available. [Brief location benefit]. What specific information are you looking for about this project?"`;
+
+      if (datasetContext.success && datasetContext.context) {
+        enhancedInstructions += `\n\n${datasetContext.context}`;
+      }
+      
+      if (payload.instructions) {
+        payload.instructions = `${enhancedInstructions}\n\n${payload.instructions}`;
+      } else {
+        payload.instructions = enhancedInstructions;
+      }
+
+      const response = await this.client.responses.create(payload);
+
+      return {
+        success: true,
+        message: response.output_text,
+        last_response_id: response.id,
+        project_name: projectName,
+        dataset_used: datasetContext?.success || false,
+        context_info: datasetContext?.contextInfo || null,
+        phase: 1
+      };
+    } catch (error) {
+      logger.error('Error in Phase 1 question handling:', error);
+      throw error;
+    }
+  }
+
+  async handlePhase2Question(prompt, payload, lastResponseId, projectName, detectedLanguage, languageInstruction) {
+    try {
+      payload.previous_response_id = lastResponseId;
+      
+      // Phase 2: Get detailed properties data for comprehensive analysis
+      const detailedContext = await this.getDetailedDatasetContext(prompt, projectName);
+      
+      // Enhance the prompt with detailed context and language instruction
+      let enhancedPrompt = prompt;
+      
+      if (detailedContext.success && detailedContext.context) {
+        enhancedPrompt += `\n\nDETAILED CONTEXT: ${detailedContext.context}`;
+      }
+      
+      // Add language instruction to the prompt
+      enhancedPrompt += `\n\nINSTRUCTION: ${languageInstruction}`;
+      
+      payload.input = enhancedPrompt;
+      
+      // Phase 2 Instructions: Detailed analysis
+      let enhancedInstructions = `You are a professional real estate consultant with access to comprehensive property data. ${languageInstruction}
+
+PHASE 2 RESPONSE RULES:
+- Use detailed properties data analysis
+- Provide exact price ranges, financing terms, delivery dates
+- Filter by property type and business type when relevant
+- Include specific, accurate information from properties array
+- Provide detailed comparisons and alternatives
+- Include financing details, down payments, installments
+- Mention specific property features and finishing options
+- End with clear next steps or booking options
+
+PROFESSIONAL COMMUNICATION RULES:
+- NEVER say "based on the available data", "according to the data", "the data shows", or similar phrases
+- NEVER mention data sources, datasets, or technical details to customers
+- Speak with confidence and authority as a real estate expert
+- Present information as definitive facts, not as data analysis
+- Use professional, client-facing language at all times
+- Avoid any language that suggests uncertainty or data limitations
+
+DELIVERY DATE FILTERING:
+- Only mention properties with delivery dates in the future or today
+- Do not include properties with past delivery dates
+- If a property has no delivery date, it may be ready for immediate delivery
+- Always verify delivery dates before making claims about availability
+
+DETAILED ANALYSIS CAPABILITIES:
+- Exact pricing for specific property types
+- Financing terms and installment plans
+- Delivery dates and construction status
+- Property features and finishing options
+- Business type comparisons (primary vs resale)
+- Location benefits and amenities
+- Developer reputation and track record
+
+IMPORTANT DATA LIMITATIONS:
+- Some projects may have undefined property type information
+- When property types are undefined, focus on business type (resale vs developer_sale)
+- Always verify data availability before making claims
+- If specific data is not available, clearly state this limitation
+- Only show properties with valid future delivery dates
+
+RESPONSE ACCURACY:
+- Only state information that is confirmed in the data
+- If no resale properties exist for a project, clearly state this
+- If property type information is limited, explain what is available
+- Always base responses on actual data, not assumptions
+- Never mention properties with past delivery dates as available
+- Present all information as definitive facts, not data analysis`;
+
+      if (payload.instructions) {
+        payload.instructions = `${enhancedInstructions}\n\n${payload.instructions}`;
+      } else {
+        payload.instructions = enhancedInstructions;
+      }
+
+      const response = await this.client.responses.create(payload);
+
+      return {
+        success: true,
+        message: response.output_text,
+        last_response_id: response.id,
+        project_name: projectName,
+        dataset_used: detailedContext?.success || false,
+        context_info: detailedContext?.contextInfo || null,
+        phase: 2
+      };
+    } catch (error) {
+      logger.error('Error in Phase 2 question handling:', error);
+      throw error;
+    }
+  }
+
+  async getBasicDatasetContext(prompt, projectName) {
+    try {
+      // Load dataset if not already loaded
+      const loadResult = await datasetService.loadDataset();
+      if (!loadResult.success) {
+        logger.warn('Dataset not available:', loadResult.error);
+        return { success: false, error: loadResult.error };
+      }
+
+      let contextInfo = `Market Overview: ${loadResult.count} total projects available.`;
+      let relevantProjects = [];
+
+      // Get specific project if mentioned
+      if (projectName) {
+        const projectResult = await datasetService.getProjectByName(projectName);
+        if (projectResult.success) {
+          relevantProjects.push(projectResult.project);
+        }
+      }
+
+      // Search for projects based on prompt keywords
+      const searchKeywords = this.extractSearchKeywords(prompt);
+      if (searchKeywords.length > 0) {
+        const searchResult = await datasetService.searchProjects(searchKeywords.join(' '));
+        
+        if (searchResult.success && searchResult.projects.length > 0) {
+          relevantProjects = [...relevantProjects, ...searchResult.projects.slice(0, 3)];
+        }
+      }
+
+      // Remove duplicates
+      relevantProjects = relevantProjects.filter((project, index, self) => 
+        index === self.findIndex(p => p.name === project.name)
+      );
+
+      // Format basic context (no detailed pricing/financing)
+      let context = '';
+      
+      if (relevantProjects.length > 0) {
+        context += `\n\nBASIC PROJECT OVERVIEW:\n${this.formatBasicProjectInfo(relevantProjects)}`;
+        contextInfo += ` ${relevantProjects.length} relevant projects found.`;
+      }
+
+      // Add basic market insights if no specific projects found
+      if (relevantProjects.length === 0) {
+        const insightsResult = await datasetService.getMarketInsights();
+        if (insightsResult.success) {
+          const insights = insightsResult.insights;
+          context += `\n\nMARKET OVERVIEW:
+- Total Projects: ${insights.totalProjects}
+- Available Areas: ${insights.areas.join(', ')}
+- Top Developers: ${insights.developers.slice(0, 5).join(', ')}`;
+        }
+      }
+
+      return {
+        success: true,
+        context,
+        contextInfo
+      };
+    } catch (error) {
+      logger.error('Error getting basic dataset context:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async getDetailedDatasetContext(prompt, projectName) {
+    try {
+      // Load dataset if not already loaded
+      const loadResult = await datasetService.loadDataset();
+      if (!loadResult.success) {
+        logger.warn('Dataset not available:', loadResult.error);
+        return { success: false, error: loadResult.error };
+      }
+
+      let contextInfo = `Detailed Analysis: ${loadResult.count} total projects available.`;
+      let relevantProjects = [];
+      let detailedProperties = [];
+
+      // Get specific project if mentioned
+      if (projectName) {
+        const projectResult = await datasetService.getProjectByName(projectName);
+        if (projectResult.success) {
+          relevantProjects.push(projectResult.project);
+          
+          // Get detailed properties for this project
+          const propertiesResult = await datasetService.getProperties(projectName);
+          if (propertiesResult.success) {
+            detailedProperties = propertiesResult.properties;
+          }
+        }
+      }
+
+      // Search for projects based on prompt keywords
+      const searchKeywords = this.extractSearchKeywords(prompt);
+      if (searchKeywords.length > 0) {
+        const searchResult = await datasetService.searchProjects(searchKeywords.join(' '));
+        
+        if (searchResult.success && searchResult.projects.length > 0) {
+          relevantProjects = [...relevantProjects, ...searchResult.projects.slice(0, 5)];
+        }
+      }
+
+      // Remove duplicates
+      relevantProjects = relevantProjects.filter((project, index, self) => 
+        index === self.findIndex(p => p.name === project.name)
+      );
+
+      // Format detailed context with properties data
+      let context = '';
+      
+      if (relevantProjects.length > 0) {
+        context += `\n\nDETAILED PROJECT ANALYSIS:\n${datasetService.formatProjectsForPrompt(relevantProjects)}`;
+        contextInfo += ` ${relevantProjects.length} relevant projects found.`;
+      }
+
+      if (detailedProperties.length > 0) {
+        context += `\n\nDETAILED PROPERTIES DATA:\n${this.formatDetailedProperties(detailedProperties)}`;
+        contextInfo += ` ${detailedProperties.length} detailed properties available.`;
+      }
+
+      // Add property types information if available
+      if (projectName) {
+        const propertyTypesResult = await datasetService.getPropertyTypes(projectName);
+        if (propertyTypesResult.success) {
+          context += `\n\nPROPERTY TYPES BREAKDOWN:\n${this.formatPropertyTypes(propertyTypesResult.propertyTypes)}`;
+        }
+      }
+
+      return {
+        success: true,
+        context,
+        contextInfo
+      };
+    } catch (error) {
+      logger.error('Error getting detailed dataset context:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  formatBasicProjectInfo(projects) {
+    if (!projects || projects.length === 0) {
+      return 'No projects available.';
+    }
+
+    return projects.map(project => {
+      const areaRange = project.min_area && project.max_area 
+        ? `${project.min_area}-${project.max_area} sqm`
+        : 'Various sizes available';
+      
+      const bedroomRange = project.min_bedrooms && project.max_bedrooms 
+        ? `${project.min_bedrooms}-${project.max_bedrooms} bedrooms`
+        : 'Various configurations';
+
+      const propertyTypes = project.property_types_names || 'Various types available';
+      const deliveryDate = project.min_delivery_date 
+        ? new Date(project.min_delivery_date).toLocaleDateString()
+        : 'Various delivery dates';
+
+      return `• ${project.name} by ${project.developer_name} in ${project.area_name}
+  - Property Types: ${propertyTypes}
+  - Size Range: ${areaRange}
+  - Bedrooms: ${bedroomRange}
+  - Delivery: ${deliveryDate}
+  - Financing: ${project.financing_eligibility ? 'Available' : 'Contact for details'}`;
+    }).join('\n\n');
+  }
+
+  formatDetailedProperties(properties) {
+    if (!properties || properties.length === 0) {
+      return 'No detailed properties available.';
+    }
+
+    return properties.map((property, index) => {
+      // Price formatting
+      let price;
+      if (property.price) {
+        price = `EGP ${property.price.toLocaleString()}`;
+      } else if (property.min_price && property.max_price && property.min_price !== property.max_price) {
+        price = `EGP ${property.min_price.toLocaleString()} - EGP ${property.max_price.toLocaleString()}`;
+      } else if (property.min_price) {
+        price = `EGP ${property.min_price.toLocaleString()}`;
+      } else if (property.max_price) {
+        price = `EGP ${property.max_price.toLocaleString()}`;
+      } else {
+        price = 'Contact for pricing';
+      }
+
+      // Area formatting
+      let area;
+      if (property.area) {
+        area = `${property.area} sqm`;
+      } else if (property.min_area && property.max_area && property.min_area !== property.max_area) {
+        area = `${property.min_area}-${property.max_area} sqm`;
+      } else if (property.min_area) {
+        area = `${property.min_area} sqm`;
+      } else if (property.max_area) {
+        area = `${property.max_area} sqm`;
+      } else {
+        area = 'Contact for details';
+      }
+
+      const bedrooms = property.bedrooms || property.min_bedrooms || 'Contact for details';
+      const bathrooms = property.bathrooms || property.min_bathrooms || 'Contact for details';
+      const finishing = property.finishing || 'Contact for details';
+      
+      // Delivery date formatting
+      let deliveryDate;
+      if (property.min_delivery_date && property.max_delivery_date) {
+        const minDate = new Date(property.min_delivery_date);
+        const maxDate = new Date(property.max_delivery_date);
+        if (minDate.getTime() === maxDate.getTime()) {
+          deliveryDate = minDate.toLocaleDateString();
+        } else {
+          deliveryDate = `${minDate.toLocaleDateString()} - ${maxDate.toLocaleDateString()}`;
+        }
+      } else if (property.min_delivery_date) {
+        deliveryDate = new Date(property.min_delivery_date).toLocaleDateString();
+      } else if (property.max_delivery_date) {
+        deliveryDate = new Date(property.max_delivery_date).toLocaleDateString();
+      } else {
+        deliveryDate = 'Contact for details';
+      }
+      
+      // Financing formatting
+      let financing;
+      
+      // Check if we have installment or down payment data
+      const hasInstallmentData = property.installments || property.min_installments || property.max_installments;
+      const hasDownPaymentData = property.down_payment || property.min_down_payment || property.max_down_payment;
+      
+      if (property.financing_available || hasInstallmentData || hasDownPaymentData) {
+        // Down payment formatting
+        let downPayment;
+        if (property.down_payment) {
+          downPayment = `${property.down_payment}%`;
+        } else if (property.min_down_payment && property.max_down_payment && property.min_down_payment !== property.max_down_payment) {
+          downPayment = `${property.min_down_payment}%-${property.max_down_payment}%`;
+        } else if (property.min_down_payment) {
+          downPayment = `${property.min_down_payment}%`;
+        } else if (property.max_down_payment) {
+          downPayment = `${property.max_down_payment}%`;
+        } else {
+          downPayment = 'Contact for details';
+        }
+        
+        // Installment formatting
+        let installments;
+        if (property.installments) {
+          installments = `${property.installments} years`;
+        } else if (property.min_installments && property.max_installments && property.min_installments !== property.max_installments) {
+          installments = `${property.min_installments.toLocaleString()} - ${property.max_installments.toLocaleString()} EGP/month`;
+        } else if (property.min_installments) {
+          installments = `${property.min_installments.toLocaleString()} EGP/month`;
+        } else if (property.max_installments) {
+          installments = `${property.max_installments.toLocaleString()} EGP/month`;
+        } else {
+          installments = 'Contact for details';
+        }
+        
+        financing = `Yes (${downPayment} down, ${installments})`;
+      } else {
+        financing = 'No';
+      }
+
+      return `${index + 1}. ${property.property_type_name || ''} - ${property.business_type || ''}
+  - Price: ${price}
+  - Area: ${area}
+  - Bedrooms: ${bedrooms} | Bathrooms: ${bathrooms}
+  - Finishing: ${finishing}
+  - Delivery: ${deliveryDate}
+  - Financing: ${financing}
+  - Project: ${property.project_name} by ${property.project_developer}`;
+    }).join('\n\n');
+  }
+
+  formatPropertyTypes(propertyTypes) {
+    if (!propertyTypes || propertyTypes.length === 0) {
+      return 'No property types available.';
+    }
+
+    return propertyTypes.map(pt => {
+      const priceRange = pt.price_range.min && pt.price_range.max 
+        ? `EGP ${pt.price_range.min.toLocaleString()} - ${pt.price_range.max.toLocaleString()}`
+        : 'Contact for pricing';
+      
+      const areaRange = pt.area_range.min && pt.area_range.max 
+        ? `${pt.area_range.min}-${pt.area_range.max} sqm`
+        : 'Various sizes';
+
+      return `• ${pt.name}
+  - Properties Available: ${pt.properties_count}
+  - Price Range: ${priceRange}
+  - Size Range: ${areaRange}
+  - Business Types: ${pt.business_types.join(', ')}`;
+    }).join('\n\n');
   }
 
   async getDatasetContext(prompt, projectName) {
@@ -314,12 +724,23 @@ class OpenAIService {
 
     const prompt = `You are a real estate consultant for ${name} by ${developer_name} in ${area_name}.
 
-    KEY PROJECT INFO:
-    - Price: EGP ${min_price?.toLocaleString() || 'Contact'} - ${max_price?.toLocaleString() || 'Contact'}
-    - Size: ${min_area}-${max_area} sqm
+    PHASE 1 PROJECT OVERVIEW:
+    - Project: ${name} by ${developer_name}
+    - Location: ${area_name}
+    - Property Types: ${property_types_names || 'Various types available'}
+    - Size Range: ${min_area}-${max_area} sqm
     - Bedrooms: ${min_bedrooms}-${max_bedrooms}
     - Delivery: ${new Date(min_delivery_date).toLocaleDateString()}
-    - Financing: ${financing_eligibility ? `Yes (${min_down_payment}%-${max_down_payment}% down)` : 'No'}
+    - Financing: ${financing_eligibility ? 'Available' : 'Contact for details'}
+    
+    PHASE 1 RESPONSE RULES:
+    1. Provide 2-3 sentence brief project overview
+    2. Include project name, location, developer
+    3. Mention available property types and unit counts
+    4. NO detailed pricing or financing information
+    5. NO specific property details
+    6. Simple call-to-action asking what they need
+    7. Keep responses concise and welcoming
     
     LANGUAGE ADAPTATION:
     - Mirror the client's language (Arabic/English/Mixed)
@@ -328,23 +749,15 @@ class OpenAIService {
     - NOT OK: Being too casual or using street slang
     - Mix languages naturally if they do: "الproject ده في location ممتاز"
     
-    RESPONSE RULES:
-    1. Give DIRECT, CONCISE answers (2-3 sentences max per response)
-    2. State facts, not fluff
-    3. If info is missing, say "I'll have our team provide that" - don't elaborate
-    4. End responses with ONE clear action: "Would you like to [specific action]?"
-    5. Adapt formality to match client (but stay professional)
+    EXAMPLE RESPONSE FORMAT:
+    "[Project Name] by [Developer] in [Location] offers [property types] with [unit count] units available. [Brief location benefit]. What specific information are you looking for about this project?"
     
     CONVERSATION FLOW:
-    - Answer → Qualify need → Book meeting
-    - Don't over-explain or repeat information
-    - Focus on their specific question only
+    - Brief overview → Ask what they need → Guide to detailed info
+    - Don't over-explain or provide detailed pricing
+    - Focus on welcoming and gathering their specific needs
     
-    BOOKING SCRIPT:
-    Formal: "I can schedule a consultation with our sales team for [specific day/time]. Which works for you?"
-    Semi-formal: "نقدر نحجزلك meeting مع الsales team يوم [specific day/time]. ايه رأيك?"
-    
-    Remember: Be helpful but BRIEF. Match their style while keeping it professional.`;
+    Remember: This is Phase 1 - keep it brief and welcoming. Detailed information comes in follow-up questions.`;
 
     return prompt;
   }

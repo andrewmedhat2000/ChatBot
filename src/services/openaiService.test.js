@@ -96,7 +96,8 @@ describe('OpenAIService.createChatCompletion', () => {
         last_response_id: 'xyz789',
         project_name: null,
         dataset_used: true,
-        context_info: expect.any(String)
+        context_info: expect.any(String),
+        phase: 2
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
@@ -126,7 +127,8 @@ describe('OpenAIService.createChatCompletion', () => {
         last_response_id: 'abc123',
         project_name: null,
         dataset_used: true,
-        context_info: expect.any(String)
+        context_info: expect.any(String),
+        phase: 1
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
@@ -177,9 +179,10 @@ describe('OpenAIService.createChatCompletion', () => {
         last_response_id: 'abc123',
         project_name: 'my-project',
         dataset_used: true,
-        context_info: expect.any(String)
+        context_info: expect.any(String),
+        phase: 1
       });
-    });
+    }, 10000);
 
     it('should handle null projectName in normal mode', async () => {
       const mockResponse = {
@@ -197,8 +200,140 @@ describe('OpenAIService.createChatCompletion', () => {
         last_response_id: 'abc123',
         project_name: null,
         dataset_used: true,
-        context_info: expect.any(String)
+        context_info: expect.any(String),
+        phase: 1
       });
+    });
+
+    it('should include Phase 1 instructions for first questions', async () => {
+      const mockResponse = {
+        output_text: 'Project information with brief overview',
+        id: 'abc123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      const result = await openaiService.createChatCompletion('Tell me about apartments in New Cairo', {}, null, false, null);
+      
+      expect(result.success).toBe(true);
+      expect(result.phase).toBe(1);
+      
+      // Verify that the instructions include Phase 1 guidelines
+      expect(openaiService.client.responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instructions: expect.stringContaining('PHASE 1 RESPONSE RULES'),
+          instructions: expect.stringContaining('Provide 2-3 sentence brief project overview'),
+          instructions: expect.stringContaining('NO detailed pricing or financing information'),
+          instructions: expect.stringContaining('Simple call-to-action asking what they need')
+        })
+      );
+    });
+
+    it('should include Phase 2 instructions for follow-up questions', async () => {
+      const mockResponse = {
+        output_text: 'Detailed project analysis with specific information',
+        id: 'xyz789'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      const result = await openaiService.createChatCompletion('What are the exact prices?', {}, 'prevId', false, null);
+      
+      expect(result.success).toBe(true);
+      expect(result.phase).toBe(2);
+      
+      // Verify that the instructions include Phase 2 guidelines
+      expect(openaiService.client.responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instructions: expect.stringContaining('PHASE 2 RESPONSE RULES'),
+          instructions: expect.stringContaining('Use detailed properties data analysis'),
+          instructions: expect.stringContaining('Provide exact price ranges, financing terms'),
+          instructions: expect.stringContaining('Include specific, accurate information from properties array')
+        })
+      );
+    });
+
+    it('should handle hierarchical property structure in prompts', async () => {
+      const mockResponse = {
+        output_text: 'Hierarchical property information with specific details',
+        id: 'abc123'
+      };
+      
+      openaiService.client.responses.create.mockResolvedValue(mockResponse);
+      
+      const result = await openaiService.createChatCompletion('Tell me about primary villas in O West Orascom', {}, null, false, 'O West Orascom');
+      
+      expect(result.success).toBe(true);
+      expect(result.phase).toBe(1);
+      
+      // Verify that the instructions include Phase 1 guidelines
+      expect(openaiService.client.responses.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          instructions: expect.stringContaining('PHASE 1 RESPONSE RULES'),
+          instructions: expect.stringContaining('Provide 2-3 sentence brief project overview'),
+          instructions: expect.stringContaining('NO detailed pricing or financing information')
+        })
+      );
+    });
+
+    it('should format property types and properties correctly', async () => {
+      const mockProjectData = {
+        name: 'O West Orascom',
+        developer_name: 'Orascom Development',
+        area_name: 'New Cairo',
+        min_area: 150,
+        max_area: 200,
+        min_bedrooms: 2,
+        max_bedrooms: 3,
+        min_delivery_date: '2025-06-01',
+        financing_eligibility: true,
+        property_types_names: 'Villa, Twinhouse'
+      };
+
+      const formattedPrompt = openaiService.formatProjectDataToPrompt(mockProjectData);
+      
+      expect(formattedPrompt).toContain('PHASE 1 PROJECT OVERVIEW:');
+      expect(formattedPrompt).toContain('O West Orascom by Orascom Development');
+      expect(formattedPrompt).toContain('Location: New Cairo');
+      expect(formattedPrompt).toContain('Property Types: Villa, Twinhouse');
+      expect(formattedPrompt).toContain('Size Range: 150-200 sqm');
+      expect(formattedPrompt).toContain('Bedrooms: 2-3');
+      expect(formattedPrompt).toContain('Financing: Available');
+      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES:');
+      expect(formattedPrompt).toContain('NO detailed pricing or financing information');
+      expect(formattedPrompt).toContain('Simple call-to-action asking what they need');
+    });
+
+    it('should handle projects without property types gracefully', async () => {
+      const mockProjectData = {
+        name: 'Test Project',
+        developer_name: 'Test Developer',
+        area_name: 'Test Area',
+        property_types_names: null // No property types
+      };
+
+      const formattedPrompt = openaiService.formatProjectDataToPrompt(mockProjectData);
+      
+      expect(formattedPrompt).toContain('Test Project');
+      expect(formattedPrompt).toContain('Test Developer');
+      expect(formattedPrompt).toContain('Test Area');
+      expect(formattedPrompt).toContain('Property Types: Various types available');
+      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES:');
+    });
+
+    it('should handle property types without properties gracefully', async () => {
+      const mockProjectData = {
+        name: 'Test Project',
+        developer_name: 'Test Developer',
+        area_name: 'Test Area',
+        property_types_names: 'Villa'
+      };
+
+      const formattedPrompt = openaiService.formatProjectDataToPrompt(mockProjectData);
+      
+      expect(formattedPrompt).toContain('Property Types: Villa');
+      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES:');
+      expect(formattedPrompt).toContain('NO detailed pricing or financing information');
     });
 
     it('should merge custom options with defaults', async () => {
