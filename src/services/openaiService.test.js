@@ -97,7 +97,8 @@ describe('OpenAIService.createChatCompletion', () => {
         project_name: null,
         dataset_used: true,
         context_info: expect.any(String),
-        phase: 2
+        phase: 2,
+        campaign_type: 'primary'
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
@@ -128,7 +129,8 @@ describe('OpenAIService.createChatCompletion', () => {
         project_name: null,
         dataset_used: true,
         context_info: expect.any(String),
-        phase: 1
+        phase: 1,
+        campaign_type: 'primary'
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
@@ -178,9 +180,10 @@ describe('OpenAIService.createChatCompletion', () => {
         message: 'Hello! How can I help you today?',
         last_response_id: 'abc123',
         project_name: 'my-project',
-        dataset_used: true,
-        context_info: expect.any(String),
-        phase: 1
+        dataset_used: false,
+        context_info: null,
+        phase: 1,
+        campaign_type: 'primary'
       });
     }, 10000);
 
@@ -201,7 +204,8 @@ describe('OpenAIService.createChatCompletion', () => {
         project_name: null,
         dataset_used: true,
         context_info: expect.any(String),
-        phase: 1
+        phase: 1,
+        campaign_type: 'primary'
       });
     });
 
