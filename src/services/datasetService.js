@@ -6,14 +6,137 @@ const logger = require('../utils/logger');
 class DatasetService {
   constructor() {
     this.projects = [];
+    this.primaryProjects = [];
+    this.resaleProjects = [];
     this.loaded = false;
+    this.primaryLoaded = false;
+    this.resaleLoaded = false;
     this.datasetPath = process.env.PROJECT_DATASET_PATH || './data/projects.csv';
+    this.primaryDatasetPath = process.env.PRIMARY_DATASET_PATH || './data/primary_properties.csv';
+    this.resaleDatasetPath = process.env.RESALE_DATASET_PATH || './data/resale_properties.csv';
   }
 
-  async loadDataset() {
+  async loadDataset(campaignType = 'primary') {
+    try {
+      // If campaign type is specified, load the appropriate dataset
+      if (campaignType === 'primary' || campaignType === 'developer_sale') {
+        return await this.loadPrimaryDataset();
+      } else if (campaignType === 'resale' || campaignType === 'secondary') {
+        return await this.loadResaleDataset();
+      } else {
+        // Default to loading the combined dataset
+        return await this.loadCombinedDataset();
+      }
+    } catch (error) {
+      logger.error('Error in loadDataset:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async loadPrimaryDataset() {
+    try {
+      if (this.primaryLoaded) {
+        return { success: true, message: 'Primary dataset already loaded', count: this.primaryProjects.length };
+      }
+
+      // Check if primary dataset file exists, if not create it from the main dataset
+      if (!fs.existsSync(this.primaryDatasetPath)) {
+        await this.createSeparateDatasets();
+      }
+
+      if (!fs.existsSync(this.primaryDatasetPath)) {
+        logger.warn(`Primary dataset file not found at: ${this.primaryDatasetPath}`);
+        return { success: false, error: 'Primary dataset file not found' };
+      }
+
+      return new Promise((resolve, reject) => {
+        const results = [];
+        
+        fs.createReadStream(this.primaryDatasetPath)
+          .pipe(csv())
+          .on('data', (data) => {
+            const project = this.parseProjectData(data);
+            if (project) {
+              results.push(project);
+            }
+          })
+          .on('end', () => {
+            this.primaryProjects = results;
+            this.projects = results; // Set current projects to primary
+            this.primaryLoaded = true;
+            logger.info(`Primary dataset loaded successfully with ${results.length} projects`);
+            resolve({ 
+              success: true, 
+              message: 'Primary dataset loaded successfully', 
+              count: results.length,
+              campaignType: 'primary'
+            });
+          })
+          .on('error', (error) => {
+            logger.error('Error loading primary dataset:', error);
+            reject({ success: false, error: error.message });
+          });
+      });
+    } catch (error) {
+      logger.error('Error in loadPrimaryDataset:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async loadResaleDataset() {
+    try {
+      if (this.resaleLoaded) {
+        return { success: true, message: 'Resale dataset already loaded', count: this.resaleProjects.length };
+      }
+
+      // Check if resale dataset file exists, if not create it from the main dataset
+      if (!fs.existsSync(this.resaleDatasetPath)) {
+        await this.createSeparateDatasets();
+      }
+
+      if (!fs.existsSync(this.resaleDatasetPath)) {
+        logger.warn(`Resale dataset file not found at: ${this.resaleDatasetPath}`);
+        return { success: false, error: 'Resale dataset file not found' };
+      }
+
+      return new Promise((resolve, reject) => {
+        const results = [];
+        
+        fs.createReadStream(this.resaleDatasetPath)
+          .pipe(csv())
+          .on('data', (data) => {
+            const project = this.parseProjectData(data);
+            if (project) {
+              results.push(project);
+            }
+          })
+          .on('end', () => {
+            this.resaleProjects = results;
+            this.projects = results; // Set current projects to resale
+            this.resaleLoaded = true;
+            logger.info(`Resale dataset loaded successfully with ${results.length} projects`);
+            resolve({ 
+              success: true, 
+              message: 'Resale dataset loaded successfully', 
+              count: results.length,
+              campaignType: 'resale'
+            });
+          })
+          .on('error', (error) => {
+            logger.error('Error loading resale dataset:', error);
+            reject({ success: false, error: error.message });
+          });
+      });
+    } catch (error) {
+      logger.error('Error in loadResaleDataset:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  async loadCombinedDataset() {
     try {
       if (this.loaded) {
-        return { success: true, message: 'Dataset already loaded', count: this.projects.length };
+        return { success: true, message: 'Combined dataset already loaded', count: this.projects.length };
       }
 
       if (!fs.existsSync(this.datasetPath)) {
@@ -27,7 +150,6 @@ class DatasetService {
         fs.createReadStream(this.datasetPath)
           .pipe(csv())
           .on('data', (data) => {
-            // Clean and parse the data
             const project = this.parseProjectData(data);
             if (project) {
               results.push(project);
@@ -36,22 +158,217 @@ class DatasetService {
           .on('end', () => {
             this.projects = results;
             this.loaded = true;
-            logger.info(`Dataset loaded successfully with ${results.length} projects`);
+            logger.info(`Combined dataset loaded successfully with ${results.length} projects`);
             resolve({ 
               success: true, 
-              message: 'Dataset loaded successfully', 
-              count: results.length 
+              message: 'Combined dataset loaded successfully', 
+              count: results.length,
+              campaignType: 'combined'
             });
           })
           .on('error', (error) => {
-            logger.error('Error loading dataset:', error);
+            logger.error('Error loading combined dataset:', error);
             reject({ success: false, error: error.message });
           });
       });
     } catch (error) {
-      logger.error('Error in loadDataset:', error);
+      logger.error('Error in loadCombinedDataset:', error);
       return { success: false, error: error.message };
     }
+  }
+
+  async createSeparateDatasets() {
+    try {
+      logger.info('Creating separate datasets for primary and resale properties...');
+      
+      if (!fs.existsSync(this.datasetPath)) {
+        logger.error(`Main dataset file not found at: ${this.datasetPath}`);
+        return { success: false, error: 'Main dataset file not found' };
+      }
+
+      const primaryData = [];
+      const resaleData = [];
+      let headerRow = null;
+
+      return new Promise((resolve, reject) => {
+        fs.createReadStream(this.datasetPath)
+          .pipe(csv())
+          .on('data', (data) => {
+            if (!headerRow) {
+              headerRow = Object.keys(data);
+            }
+
+            // Create separate rows for each business type
+            const primaryRow = this.createFilteredRow(data, 'developer_sale');
+            const resaleRow = this.createFilteredRow(data, 'resale');
+
+            if (primaryRow) {
+              primaryData.push(primaryRow);
+            }
+            if (resaleRow) {
+              resaleData.push(resaleRow);
+            }
+          })
+          .on('end', async () => {
+            try {
+              // Write primary dataset
+              await this.writeCSV(this.primaryDatasetPath, headerRow, primaryData);
+              logger.info(`Primary dataset created with ${primaryData.length} projects`);
+
+              // Write resale dataset
+              await this.writeCSV(this.resaleDatasetPath, headerRow, resaleData);
+              logger.info(`Resale dataset created with ${resaleData.length} projects`);
+
+              resolve({ 
+                success: true, 
+                primaryCount: primaryData.length, 
+                resaleCount: resaleData.length 
+              });
+            } catch (error) {
+              reject(error);
+            }
+          })
+          .on('error', (error) => {
+            logger.error('Error creating separate datasets:', error);
+            reject(error);
+          });
+      });
+    } catch (error) {
+      logger.error('Error in createSeparateDatasets:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  createFilteredRow(data, businessType) {
+    // Check if this project has any properties of the specified business type
+    const hasBusinessType = this.hasBusinessType(data, businessType);
+    
+    if (!hasBusinessType) {
+      return null; // Don't include this project for this business type
+    }
+
+    // Create a copy of the data row
+    const filteredRow = { ...data };
+
+    // Update business type counts to only include the specified type
+    if (businessType === 'developer_sale') {
+      filteredRow['business_types.developer_sale'] = data['business_types.developer_sale'] || '0';
+      filteredRow['business_types.resale'] = '0'; // Set resale count to 0
+    } else if (businessType === 'resale') {
+      filteredRow['business_types.developer_sale'] = '0'; // Set developer_sale count to 0
+      filteredRow['business_types.resale'] = data['business_types.resale'] || '0';
+    }
+
+    // Filter individual properties to only include the specified business type
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 30; j++) {
+        const businessTypeField = `property_types[${i}].properties[${j}].business_type`;
+        const currentBusinessType = data[businessTypeField]?.trim();
+        
+        if (currentBusinessType && currentBusinessType !== businessType) {
+          // Clear properties that don't match the business type
+          this.clearPropertyFields(filteredRow, i, j);
+        }
+      }
+    }
+
+    // Update property type counts to reflect only the filtered properties
+    this.updatePropertyTypeCounts(filteredRow, businessType);
+
+    return filteredRow;
+  }
+
+  clearPropertyFields(row, propertyTypeIndex, propertyIndex) {
+    // Clear all property-related fields for the specified property
+    const propertyFields = [
+      'property_id', 'business_type', 'price', 'min_price', 'max_price',
+      'area', 'min_area', 'max_area', 'min_bedrooms', 'max_bedrooms',
+      'min_bathrooms', 'max_bathrooms', 'finishing', 'delivery_date',
+      'min_delivery_date', 'max_delivery_date', 'financing_available',
+      'down_payment', 'min_down_payment', 'max_down_payment',
+      'installments', 'min_installments', 'max_installments'
+    ];
+
+    propertyFields.forEach(field => {
+      const fieldName = `property_types[${propertyTypeIndex}].properties[${propertyIndex}].${field}`;
+      row[fieldName] = '';
+    });
+  }
+
+  updatePropertyTypeCounts(row, businessType) {
+    // Update property type counts to reflect only the filtered properties
+    for (let i = 0; i < 8; i++) {
+      const countField = `property_types[${i}].property_types_count`;
+      let validPropertyCount = 0;
+
+      // Count properties that match the business type
+      for (let j = 0; j < 30; j++) {
+        const businessTypeField = `property_types[${i}].properties[${j}].business_type`;
+        if (row[businessTypeField] && row[businessTypeField].trim() === businessType) {
+          validPropertyCount++;
+        }
+      }
+
+      // Update the count field
+      if (row[countField]) {
+        row[countField] = validPropertyCount.toString();
+      }
+    }
+  }
+
+  hasBusinessType(data, businessType) {
+    // Check if the project has the specified business type
+    const businessTypeFields = [
+      'business_types.developer_sale',
+      'business_types.resale'
+    ];
+    
+    for (const field of businessTypeFields) {
+      if (field.includes(businessType)) {
+        const count = this.parseNumber(data[field]);
+        if (count && count > 0) {
+          return true;
+        }
+      }
+    }
+
+    // Also check individual properties
+    for (let i = 0; i < 8; i++) {
+      for (let j = 0; j < 30; j++) {
+        const businessTypeField = `property_types[${i}].properties[${j}].business_type`;
+        if (data[businessTypeField] && data[businessTypeField].trim() == businessType) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  async writeCSV(filePath, headers, data) {
+    return new Promise((resolve, reject) => {
+      const writeStream = fs.createWriteStream(filePath);
+      
+      // Write header
+      writeStream.write(headers.join(',') + '\n');
+      
+      // Write data rows
+      data.forEach(row => {
+        const values = headers.map(header => {
+          const value = row[header] || '';
+          // Escape commas and quotes in CSV
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        });
+        writeStream.write(values.join(',') + '\n');
+      });
+      
+      writeStream.end();
+      writeStream.on('finish', resolve);
+      writeStream.on('error', reject);
+    });
   }
 
   parseProjectData(data) {
