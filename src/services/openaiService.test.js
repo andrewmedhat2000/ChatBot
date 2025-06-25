@@ -98,7 +98,7 @@ describe('OpenAIService.createChatCompletion', () => {
         dataset_used: true,
         context_info: expect.any(String),
         phase: 2,
-        campaign_type: 'primary'
+        campaign_type: 'Primary'
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
@@ -130,7 +130,7 @@ describe('OpenAIService.createChatCompletion', () => {
         dataset_used: true,
         context_info: expect.any(String),
         phase: 1,
-        campaign_type: 'primary'
+        campaign_type: 'Primary'
       });
       
       expect(openaiService.client.responses.create).toHaveBeenCalledWith(
@@ -183,7 +183,7 @@ describe('OpenAIService.createChatCompletion', () => {
         dataset_used: false,
         context_info: null,
         phase: 1,
-        campaign_type: 'primary'
+        campaign_type: 'Primary'
       });
     }, 10000);
 
@@ -205,7 +205,7 @@ describe('OpenAIService.createChatCompletion', () => {
         dataset_used: true,
         context_info: expect.any(String),
         phase: 1,
-        campaign_type: 'primary'
+        campaign_type: 'Primary'
       });
     });
 
@@ -285,6 +285,8 @@ describe('OpenAIService.createChatCompletion', () => {
         name: 'O West Orascom',
         developer_name: 'Orascom Development',
         area_name: 'New Cairo',
+        min_price: 2000000,
+        max_price: 5000000,
         min_area: 150,
         max_area: 200,
         min_bedrooms: 2,
@@ -296,16 +298,12 @@ describe('OpenAIService.createChatCompletion', () => {
 
       const formattedPrompt = openaiService.formatProjectDataToPrompt(mockProjectData);
       
-      expect(formattedPrompt).toContain('PHASE 1 PROJECT OVERVIEW:');
-      expect(formattedPrompt).toContain('O West Orascom by Orascom Development');
-      expect(formattedPrompt).toContain('Location: New Cairo');
-      expect(formattedPrompt).toContain('Property Types: Villa, Twinhouse');
-      expect(formattedPrompt).toContain('Size Range: 150-200 sqm');
-      expect(formattedPrompt).toContain('Bedrooms: 2-3');
-      expect(formattedPrompt).toContain('Financing: Available');
-      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES:');
-      expect(formattedPrompt).toContain('NO detailed pricing or financing information');
-      expect(formattedPrompt).toContain('Simple call-to-action asking what they need');
+      expect(formattedPrompt).toContain('You are a real estate consultant specializing in PRIMARY UNITS (developer sales) for O West Orascom by Orascom Development in New Cairo');
+      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES');
+      expect(formattedPrompt).toContain('PRIMARY UNITS FOCUS');
+      expect(formattedPrompt).toContain('LANGUAGE ADAPTATION');
+      expect(formattedPrompt).toContain('EXAMPLE RESPONSE FORMAT');
+      expect(formattedPrompt).toContain('CONVERSATION FLOW');
     });
 
     it('should handle projects without property types gracefully', async () => {
@@ -321,8 +319,8 @@ describe('OpenAIService.createChatCompletion', () => {
       expect(formattedPrompt).toContain('Test Project');
       expect(formattedPrompt).toContain('Test Developer');
       expect(formattedPrompt).toContain('Test Area');
-      expect(formattedPrompt).toContain('Property Types: Various types available');
-      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES:');
+      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES');
+      expect(formattedPrompt).toContain('PRIMARY UNITS FOCUS');
     });
 
     it('should handle property types without properties gracefully', async () => {
@@ -335,9 +333,11 @@ describe('OpenAIService.createChatCompletion', () => {
 
       const formattedPrompt = openaiService.formatProjectDataToPrompt(mockProjectData);
       
-      expect(formattedPrompt).toContain('Property Types: Villa');
-      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES:');
-      expect(formattedPrompt).toContain('NO detailed pricing or financing information');
+      expect(formattedPrompt).toContain('Test Project');
+      expect(formattedPrompt).toContain('Test Developer');
+      expect(formattedPrompt).toContain('Test Area');
+      expect(formattedPrompt).toContain('PHASE 1 RESPONSE RULES');
+      expect(formattedPrompt).toContain('PRIMARY UNITS FOCUS');
     });
 
     it('should merge custom options with defaults', async () => {

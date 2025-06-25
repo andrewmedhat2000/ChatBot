@@ -14,7 +14,7 @@ class OpenAIService {
     });
   }
 
-  async createChatCompletion(prompt, options = {}, lastResponseId = null, test = false, projectName = null, skipProjectPrompt = false, campaignType = 'primary') {
+  async createChatCompletion(prompt, options = {}, lastResponseId = null, test = false, projectName = null, skipProjectPrompt = false, campaignType = 'Primary') {
     try {
 
       //console.log("api key", apiKey);
@@ -104,14 +104,14 @@ class OpenAIService {
       }
       
       // Phase 1 Instructions: Brief overview only
-      let enhancedInstructions = `You are a professional real estate consultant specializing in ${campaignType === 'primary' ? 'primary units (developer sales)' : 'resale properties'}. ${languageInstruction}
+      let enhancedInstructions = `You are a professional real estate consultant specializing in ${campaignType === 'Primary' ? 'primary units (developer sales)' : 'resale properties'}. ${languageInstruction}
 
 AUTOMATIC BUSINESS TYPE RECOGNITION:
-- All data provided to you has been automatically filtered for business_type: '${campaignType === 'primary' ? 'developer_sale' : 'resale'}' (${campaignType === 'primary' ? 'primary units' : 'resale properties'} only)
+- All data provided to you has been automatically filtered for business_type: '${campaignType === 'Primary' ? 'developer_sale' : 'resale'}' (${campaignType === 'Primary' ? 'primary units' : 'resale properties'} only)
 - You do not need to filter data - it's already filtered for you
-- All properties, prices, and information shown are ${campaignType === 'primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'} only
-- No ${campaignType === 'primary' ? 'resale properties' : 'primary units'} are included in the data provided
-- Automatically recognize that you're working with ${campaignType === 'primary' ? 'primary units' : 'resale properties'} only
+- All properties, prices, and information shown are ${campaignType === 'Primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'} only
+- No ${campaignType === 'Primary' ? 'resale properties' : 'primary units'} are included in the data provided
+- Automatically recognize that you're working with ${campaignType === 'Primary' ? 'primary units' : 'resale properties'} only
 
 PROPERTY TYPE DEFINITIONS (CRITICAL):
 - PRIMARY UNITS (developer_sale): Properties sold directly by the developer/construction company
@@ -141,21 +141,21 @@ CRITICAL RULES:
 - Always emphasize the benefits of buying primary units: new construction, developer guarantees, direct financing
 
 PHASE 1 RESPONSE RULES:
-- Provide 2-3 sentence brief project overview for ${campaignType === 'primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'} only
+- Provide 2-3 sentence brief project overview for ${campaignType === 'Primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'} only
 - Include project name, location, developer
-- Mention available property types and unit counts (${campaignType === 'primary' ? 'primary units' : 'resale properties'} only)
+- Mention available property types and unit counts (${campaignType === 'Primary' ? 'primary units' : 'resale properties'} only)
 - NO detailed pricing or financing information
 - NO specific property details
 - Simple call-to-action asking what they need
 - Keep responses concise and welcoming
-- Emphasize that you're showing ${campaignType === 'primary' ? 'primary units from the developer' : 'resale properties from individual owners'}
-- If no ${campaignType === 'primary' ? 'primary units' : 'resale properties'} available, clearly state this
+- Emphasize that you're showing ${campaignType === 'Primary' ? 'primary units from the developer' : 'resale properties from individual owners'}
+- If no ${campaignType === 'Primary' ? 'primary units' : 'resale properties'} available, clearly state this
 
-${campaignType === 'primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'} FOCUS:
-- ONLY discuss ${campaignType === 'primary' ? 'developer sales (primary units)' : 'resale properties (secondary market)'}
-- NEVER mention ${campaignType === 'primary' ? 'resale properties or secondary market' : 'primary units or developer sales'}
-- Always clarify that you're showing ${campaignType === 'primary' ? 'primary units from the developer' : 'resale properties from individual owners'}
-- Emphasize the benefits of buying ${campaignType === 'primary' ? 'directly from developers' : 'from individual owners'}
+${campaignType === 'Primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'} FOCUS:
+- ONLY discuss ${campaignType === 'Primary' ? 'developer sales (primary units)' : 'resale properties (secondary market)'}
+- NEVER mention ${campaignType === 'Primary' ? 'resale properties or secondary market' : 'primary units or developer sales'}
+- Always clarify that you're showing ${campaignType === 'Primary' ? 'primary units from the developer' : 'resale properties from individual owners'}
+- Emphasize the benefits of buying ${campaignType === 'Primary' ? 'directly from developers' : 'from individual owners'}
 
 PROFESSIONAL COMMUNICATION RULES:
 - NEVER say "based on the available data", "according to the data", "the data shows", or similar phrases
@@ -166,13 +166,13 @@ PROFESSIONAL COMMUNICATION RULES:
 - Avoid any language that suggests uncertainty or data limitations
 
 EXAMPLE RESPONSE FORMAT:
-"[Project Name] by [Developer] in [Location] offers [property types] with [unit count] ${campaignType === 'primary' ? 'primary units available directly from the developer' : 'resale properties available from individual owners'}. [Brief location benefit]. What specific information are you looking for about these ${campaignType === 'primary' ? 'primary units' : 'resale properties'}?"
+"[Project Name] by [Developer] in [Location] offers [property types] with [unit count] ${campaignType === 'Primary' ? 'primary units available directly from the developer' : 'resale properties available from individual owners'}. [Brief location benefit]. What specific information are you looking for about these ${campaignType === 'Primary' ? 'primary units' : 'resale properties'}?"
 
-EXAMPLE RESPONSE WHEN NO ${campaignType === 'primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'}:
-"No ${campaignType === 'primary' ? 'primary units' : 'resale properties'} are currently available in [Project Name] by [Developer]. We only handle ${campaignType === 'primary' ? 'primary units (developer sales)' : 'resale properties (secondary market)'} and do not provide information about ${campaignType === 'primary' ? 'resale properties' : 'primary units'}. Would you like to explore other projects with available ${campaignType === 'primary' ? 'primary units' : 'resale properties'}?"
+EXAMPLE RESPONSE WHEN NO ${campaignType === 'Primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES'}:
+"No ${campaignType === 'Primary' ? 'primary units' : 'resale properties'} are currently available in [Project Name] by [Developer]. We only handle ${campaignType === 'Primary' ? 'primary units (developer sales)' : 'resale properties (secondary market)'} and do not provide information about ${campaignType === 'Primary' ? 'resale properties' : 'primary units'}. Would you like to explore other projects with available ${campaignType === 'Primary' ? 'primary units' : 'resale properties'}?"
 
 AUTOMATIC RECOGNITION:
-- Automatically recognize that all data provided is already filtered for ${campaignType === 'primary' ? 'primary units' : 'resale properties'} only`;
+- Automatically recognize that all data provided is already filtered for ${campaignType === 'Primary' ? 'primary units' : 'resale properties'} only`;
 
       if (datasetContext.success && datasetContext.context) {
         enhancedInstructions += `\n\n${datasetContext.context}`;
@@ -352,13 +352,13 @@ RESPONSE ACCURACY:
         const projectResult = await datasetService.getProjectByName(projectName);
         if (projectResult.success) {
           // Check if project has properties available for the campaign type
-          const businessType = campaignType === 'primary' ? 'developer_sale' : 'resale';
+          const businessType = campaignType === 'Primary' ? 'developer_sale' : 'resale';
           const propertiesResult = await datasetService.getProperties(projectName, null, businessType);
           if (propertiesResult.success && propertiesResult.count > 0) {
             relevantProjects.push(projectResult.project);
           } else {
             // No properties available for this campaign type
-            const propertyTypeText = campaignType === 'primary' ? 'primary units' : 'resale properties';
+            const propertyTypeText = campaignType === 'Primary' ? 'primary units' : 'resale properties';
             context += `\n\n${propertyTypeText.toUpperCase()} STATUS: No ${propertyTypeText} are currently available in ${projectName}.`;
             contextInfo += ` No ${propertyTypeText} available.`;
           }
@@ -372,7 +372,7 @@ RESPONSE ACCURACY:
         
         if (searchResult.success && searchResult.projects.length > 0) {
           // Filter to only include projects with properties for the campaign type
-          const businessType = campaignType === 'primary' ? 'developer_sale' : 'resale';
+          const businessType = campaignType === 'Primary' ? 'developer_sale' : 'resale';
           const projectsWithProperties = [];
           for (const project of searchResult.projects.slice(0, 5)) {
             const propertiesResult = await datasetService.getProperties(project.name, null, businessType);
@@ -391,8 +391,8 @@ RESPONSE ACCURACY:
 
       // Format basic context based on campaign type
       let context = '';
-      const propertyTypeText = campaignType === 'primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES';
-      const businessTypeText = campaignType === 'primary' ? 'developer_sale' : 'resale';
+      const propertyTypeText = campaignType === 'Primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES';
+      const businessTypeText = campaignType === 'Primary' ? 'developer_sale' : 'resale';
       
       // Add business type context
       context += `\n\nBUSINESS TYPE CONTEXT: All data provided below has been filtered to show ONLY ${propertyTypeText} (business_type: '${businessTypeText}').`;
@@ -449,15 +449,15 @@ RESPONSE ACCURACY:
           relevantProjects.push(projectResult.project);
           
           // Get detailed properties for this project based on campaign type
-          const businessType = campaignType === 'primary' ? 'developer_sale' : 'resale';
+          const businessType = campaignType === 'Primary' ? 'developer_sale' : 'resale';
           const propertiesResult = await datasetService.getProperties(projectName, null, businessType);
           if (propertiesResult.success && propertiesResult.count > 0) {
             detailedProperties = propertiesResult.properties;
-            const propertyTypeText = campaignType === 'primary' ? 'primary units' : 'resale properties';
+            const propertyTypeText = campaignType === 'Primary' ? 'primary units' : 'resale properties';
             contextInfo += ` ${propertiesResult.count} ${propertyTypeText} available.`;
           } else {
             // No properties available for this campaign type
-            const propertyTypeText = campaignType === 'primary' ? 'primary units' : 'resale properties';
+            const propertyTypeText = campaignType === 'Primary' ? 'primary units' : 'resale properties';
             context += `\n\n${propertyTypeText.toUpperCase()} STATUS: No ${propertyTypeText} are currently available in ${projectName}.`;
             contextInfo += ` No ${propertyTypeText} available.`;
           }
@@ -481,8 +481,8 @@ RESPONSE ACCURACY:
 
       // Format detailed context with properties data based on campaign type
       let context = '';
-      const propertyTypeText = campaignType === 'primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES';
-      const businessTypeText = campaignType === 'primary' ? 'developer_sale' : 'resale';
+      const propertyTypeText = campaignType === 'Primary' ? 'PRIMARY UNITS' : 'RESALE PROPERTIES';
+      const businessTypeText = campaignType === 'Primary' ? 'developer_sale' : 'resale';
       
       // Add current date context
       const currentDate = new Date().toLocaleDateString();

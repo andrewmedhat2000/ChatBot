@@ -29,42 +29,42 @@ async function testCampaignTypeDatasets() {
       name: 'Primary Campaign - Unit Count',
       message: 'How many apartment units are available?',
       projectName: 'o west orascom',
-      campaignType: 'primary',
+      campaignType: 'Primary',
       expectedBehavior: 'Should load primary dataset and show only developer_sale properties'
     },
     {
       name: 'Resale Campaign - Unit Count',
       message: 'How many apartment units are available?',
       projectName: 'o west orascom',
-      campaignType: 'resale',
+      campaignType: 'Resale',
       expectedBehavior: 'Should load resale dataset and show only resale properties'
     },
     {
       name: 'Primary Campaign - Price Inquiry',
       message: 'What are the prices for apartments?',
       projectName: 'o west orascom',
-      campaignType: 'primary',
+      campaignType: 'Primary',
       expectedBehavior: 'Should provide prices only for primary units (developer_sale)'
     },
     {
       name: 'Resale Campaign - Price Inquiry',
       message: 'What are the prices for apartments?',
       projectName: 'o west orascom',
-      campaignType: 'resale',
+      campaignType: 'Resale',
       expectedBehavior: 'Should provide prices only for resale properties'
     },
     {
       name: 'Primary Campaign - Availability Check',
       message: 'Are there any apartments available?',
       projectName: 'o west orascom',
-      campaignType: 'primary',
+      campaignType: 'Primary',
       expectedBehavior: 'Should check availability of primary units only'
     },
     {
       name: 'Resale Campaign - Availability Check',
       message: 'Are there any apartments available?',
       projectName: 'o west orascom',
-      campaignType: 'resale',
+      campaignType: 'Resale',
       expectedBehavior: 'Should check availability of resale properties only'
     }
   ];
@@ -89,7 +89,7 @@ async function testCampaignTypeDatasets() {
       const campaignType = scenario.campaignType;
       
       // Check for appropriate business type mentions
-      const hasCorrectBusinessType = campaignType === 'primary' 
+      const hasCorrectBusinessType = campaignType === 'Primary' 
         ? (responseLower.includes('developer_sale') || responseLower.includes('primary units') || responseLower.includes('developer'))
         : (responseLower.includes('resale') || responseLower.includes('secondary market') || responseLower.includes('individual owners'));
       
@@ -97,12 +97,12 @@ async function testCampaignTypeDatasets() {
       const hasDatasetContext = responseLower.includes('filtered') || responseLower.includes('campaign') || responseLower.includes('business_type');
       
       // Check for appropriate property type focus
-      const hasPropertyTypeFocus = campaignType === 'primary'
+      const hasPropertyTypeFocus = campaignType === 'Primary'
         ? (responseLower.includes('primary units') || responseLower.includes('developer sales'))
         : (responseLower.includes('resale properties') || responseLower.includes('secondary market'));
       
       // Check for no cross-contamination (allowing negative mentions)
-      const hasNoCrossContamination = campaignType === 'primary'
+      const hasNoCrossContamination = campaignType === 'Primary'
         ? !responseLower.includes('resale') || responseLower.includes('no resale') || responseLower.includes('resale properties are not included')
         : !responseLower.includes('primary units') || responseLower.includes('no primary') || responseLower.includes('primary units are not included');
       
@@ -146,7 +146,7 @@ async function testCampaignTypeDatasets() {
 
 function getMockResponseWithCampaignType(message, projectName, campaignType) {
   const currentDate = new Date().toLocaleDateString();
-  const isPrimary = campaignType === 'primary';
+  const isPrimary = campaignType === 'Primary';
   const businessType = isPrimary ? 'developer_sale' : 'resale';
   const propertyTypeText = isPrimary ? 'primary units' : 'resale properties';
   const sourceText = isPrimary ? 'from the developer' : 'from individual owners';

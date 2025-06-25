@@ -15,21 +15,25 @@ const validateSearchRequest = [
   body('filters.bedrooms').optional().isInt({ min: 1 }).withMessage('Bedrooms must be a positive integer'),
   body('filters.area_name').optional().isString().withMessage('Area name must be a string'),
   body('filters.developer_name').optional().isString().withMessage('Developer name must be a string'),
-  body('filters.financing_eligibility').optional().isBoolean().withMessage('Financing eligibility must be a boolean')
+  body('filters.financing_eligibility').optional().isBoolean().withMessage('Financing eligibility must be a boolean'),
+  body('campaignType').optional().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale')
 ];
 
 const validateProjectRequest = [
-  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string')
+  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string'),
+  body('campaignType').optional().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale')
 ];
 
 const validateSimilarRequest = [
   body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string'),
-  body('limit').optional().isInt({ min: 1, max: 10 }).withMessage('Limit must be between 1 and 10')
+  body('limit').optional().isInt({ min: 1, max: 10 }).withMessage('Limit must be between 1 and 10'),
+  body('campaignType').optional().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale')
 ];
 
 const validateCompareRequest = [
   body('projectNames').isArray({ min: 2, max: 5 }).withMessage('Project names must be an array with 2-5 items'),
-  body('projectNames.*').isString().withMessage('Each project name must be a string')
+  body('projectNames.*').isString().withMessage('Each project name must be a string'),
+  body('campaignType').optional().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale')
 ];
 
 // Search projects endpoint
@@ -43,11 +47,11 @@ router.post('/search', apiKeyAuth, validateSearchRequest, async (req, res) => {
       });
     }
 
-    const { query, filters } = req.body;
+    const { query, filters, campaignType = 'Primary' } = req.body;
     
-    logger.info(`Dataset search request: query="${query}", filters=`, filters);
+    logger.info(`Dataset search request: query="${query}", filters=`, filters, `campaignType="${campaignType}"`);
     
-    const result = await datasetService.searchProjects(query, filters);
+    const result = await datasetService.searchProjects(query, filters, campaignType);
 
     if (!result.success) {
       return res.status(404).json({ 
@@ -83,11 +87,11 @@ router.post('/project', apiKeyAuth, validateProjectRequest, async (req, res) => 
       });
     }
 
-    const { projectName } = req.body;
+    const { projectName, campaignType = 'Primary' } = req.body;
     
-    logger.info(`Dataset project request: projectName="${projectName}"`);
+    logger.info(`Dataset project request: projectName="${projectName}", campaignType="${campaignType}"`);
     
-    const result = await datasetService.getProjectByName(projectName);
+    const result = await datasetService.getProjectByName(projectName, campaignType);
 
     if (!result.success) {
       return res.status(404).json({ 
@@ -121,11 +125,11 @@ router.post('/similar', apiKeyAuth, validateSimilarRequest, async (req, res) => 
       });
     }
 
-    const { projectName, limit = 3 } = req.body;
+    const { projectName, limit = 3, campaignType = 'Primary' } = req.body;
     
-    logger.info(`Dataset similar request: projectName="${projectName}", limit=${limit}`);
+    logger.info(`Dataset similar request: projectName="${projectName}", limit=${limit}, campaignType="${campaignType}"`);
     
-    const result = await datasetService.getSimilarProjects(projectName, limit);
+    const result = await datasetService.getSimilarProjects(projectName, limit, campaignType);
 
     if (!result.success) {
       return res.status(404).json({ 
@@ -159,11 +163,11 @@ router.post('/compare', apiKeyAuth, validateCompareRequest, async (req, res) => 
       });
     }
 
-    const { projectNames } = req.body;
+    const { projectNames, campaignType = 'Primary' } = req.body;
     
-    logger.info(`Dataset compare request: projectNames=`, projectNames);
+    logger.info(`Dataset compare request: projectNames=`, projectNames, `campaignType="${campaignType}"`);
     
-    const result = await datasetService.compareProjects(projectNames);
+    const result = await datasetService.compareProjects(projectNames, campaignType);
 
     if (!result.success) {
       return res.status(404).json({ 
@@ -243,11 +247,23 @@ router.get('/status', apiKeyAuth, async (req, res) => {
 });
 
 // Load dataset endpoint
-router.post('/load', apiKeyAuth, async (req, res) => {
+router.post('/load', apiKeyAuth, [
+  body('campaignType').optional().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale')
+], async (req, res) => {
   try {
-    logger.info('Dataset load request');
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ 
+        success: false,
+        errors: errors.array() 
+      });
+    }
+
+    const { campaignType = 'Primary' } = req.body;
     
-    const result = await datasetService.loadDataset();
+    logger.info(`Dataset load request: campaignType="${campaignType}"`);
+    
+    const result = await datasetService.loadDataset(campaignType);
 
     if (!result.success) {
       return res.status(500).json({ 
@@ -259,7 +275,8 @@ router.post('/load', apiKeyAuth, async (req, res) => {
     res.json({
       success: true,
       message: result.message,
-      count: result.count
+      count: result.count,
+      campaignType: result.campaignType
     });
   } catch (error) {
     logger.error('Error in dataset load route:', error);
@@ -305,6 +322,7 @@ router.post('/properties', apiKeyAuth, [
   body('projectName').optional().isString().withMessage('Project name must be a string'),
   body('propertyType').optional().isString().withMessage('Property type must be a string'),
   body('businessType').optional().isIn(['primary', 'resale']).withMessage('Business type must be either primary or resale'),
+  body('campaignType').optional().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale'),
   body('filters').optional().isObject().withMessage('Filters must be an object'),
   body('filters.price_min').optional().isNumeric().withMessage('Price min must be a number'),
   body('filters.price_max').optional().isNumeric().withMessage('Price max must be a number'),
@@ -323,11 +341,11 @@ router.post('/properties', apiKeyAuth, [
       });
     }
 
-    const { projectName, propertyType, businessType, filters = {} } = req.body;
+    const { projectName, propertyType, businessType, campaignType = 'Primary', filters = {} } = req.body;
     
-    logger.info(`Properties request: projectName="${projectName}", propertyType="${propertyType}", businessType="${businessType}", filters=`, filters);
+    logger.info(`Properties request: projectName="${projectName}", propertyType="${propertyType}", businessType="${businessType}", campaignType="${campaignType}", filters=`, filters);
     
-    const result = await datasetService.getProperties(projectName, propertyType, businessType, filters);
+    const result = await datasetService.getProperties(projectName, propertyType, businessType, filters, campaignType);
 
     if (!result.success) {
       return res.status(404).json({ 
@@ -345,6 +363,7 @@ router.post('/properties', apiKeyAuth, [
         projectName,
         propertyType,
         businessType,
+        campaignType,
         ...filters
       }
     });
@@ -360,7 +379,8 @@ router.post('/properties', apiKeyAuth, [
 
 // Get property types for a project endpoint
 router.post('/property-types', apiKeyAuth, [
-  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string')
+  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string'),
+  body('campaignType').optional().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -371,11 +391,11 @@ router.post('/property-types', apiKeyAuth, [
       });
     }
 
-    const { projectName } = req.body;
+    const { projectName, campaignType = 'Primary' } = req.body;
     
-    logger.info(`Property types request: projectName="${projectName}"`);
+    logger.info(`Property types request: projectName="${projectName}", campaignType="${campaignType}"`);
     
-    const result = await datasetService.getPropertyTypes(projectName);
+    const result = await datasetService.getPropertyTypes(projectName, campaignType);
 
     if (!result.success) {
       return res.status(404).json({ 
@@ -387,7 +407,8 @@ router.post('/property-types', apiKeyAuth, [
     res.json({
       success: true,
       propertyTypes: result.propertyTypes,
-      count: result.count
+      count: result.count,
+      campaignType: result.campaignType
     });
   } catch (error) {
     logger.error('Error in property types route:', error);

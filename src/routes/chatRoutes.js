@@ -21,7 +21,8 @@ const validateChatRequest = [
     return true;
   }).withMessage('Last response ID must be a string or null'),
   body('test').optional().isBoolean().withMessage('Test must be a boolean'),
-  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string')
+  body('projectName').notEmpty().isString().withMessage('Project name is required and must be a string'),
+  body('campaignType').notEmpty().isIn(['Primary', 'Resale']).withMessage('Campaign type must be one of: Primary, Resale')
 ];
 
 // Chat completion endpoint with API key authentication
@@ -35,15 +36,15 @@ router.post('/completion', apiKeyAuth, validateChatRequest, async (req, res) => 
       });
     }
 
-    const { prompt, instructions, options, lastResponseId, test, projectName } = req.body;
+    const { prompt, instructions, options, lastResponseId, test, projectName, campaignType = 'Primary' } = req.body;
     
     // Log the request for API usage
-    logger.info(`API request from IP: ${req.ip}, User-Agent: ${req.get('User-Agent')}, Test mode: ${test || false}, Project: ${projectName || 'none'}`);
+    logger.info(`API request from IP: ${req.ip}, User-Agent: ${req.get('User-Agent')}, Test mode: ${test || false}, Project: ${projectName || 'none'}, Campaign Type: ${campaignType}`);
     
     const result = await openaiService.createChatCompletion(prompt, {
       ...options,
       instructions
-    }, lastResponseId, test, projectName);
+    }, lastResponseId, test, projectName, false, campaignType);
 
     if (!result.success) {
       return res.status(500).json({ 
@@ -67,6 +68,5 @@ router.post('/completion', apiKeyAuth, validateChatRequest, async (req, res) => 
     });
   }
 });
-
 
 module.exports = router; 

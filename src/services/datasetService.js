@@ -16,12 +16,12 @@ class DatasetService {
     this.resaleDatasetPath = process.env.RESALE_DATASET_PATH || './data/resale_properties.csv';
   }
 
-  async loadDataset(campaignType = 'primary') {
+  async loadDataset(campaignType = 'Primary') {
     try {
       // If campaign type is specified, load the appropriate dataset
-      if (campaignType === 'primary' || campaignType === 'developer_sale') {
+      if (campaignType === 'Primary' || campaignType === 'primary' || campaignType === 'developer_sale') {
         return await this.loadPrimaryDataset();
-      } else if (campaignType === 'resale' || campaignType === 'secondary') {
+      } else if (campaignType === 'Resale' || campaignType === 'resale' || campaignType === 'secondary') {
         return await this.loadResaleDataset();
       } else {
         // Default to loading the combined dataset
@@ -69,7 +69,7 @@ class DatasetService {
               success: true, 
               message: 'Primary dataset loaded successfully', 
               count: results.length,
-              campaignType: 'primary'
+              campaignType: 'Primary'
             });
           })
           .on('error', (error) => {
@@ -119,7 +119,7 @@ class DatasetService {
               success: true, 
               message: 'Resale dataset loaded successfully', 
               count: results.length,
-              campaignType: 'resale'
+              campaignType: 'Resale'
             });
           })
           .on('error', (error) => {
@@ -163,7 +163,7 @@ class DatasetService {
               success: true, 
               message: 'Combined dataset loaded successfully', 
               count: results.length,
-              campaignType: 'combined'
+              campaignType: 'Combined'
             });
           })
           .on('error', (error) => {
